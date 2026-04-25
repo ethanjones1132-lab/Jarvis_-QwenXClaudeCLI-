@@ -1,5 +1,5 @@
-import { BROWSER_TOOLS } from '@ant/claude-for-chrome-mcp'
 import { chmod, mkdir, readFile, writeFile } from 'fs/promises'
+import { createRequire } from 'module'
 import { homedir } from 'os'
 import { join } from 'path'
 import { fileURLToPath } from 'url'
@@ -94,7 +94,16 @@ export function setupClaudeInChrome(): {
   systemPrompt: string
 } {
   const isNativeBuild = isInBundledMode()
-  const allowedTools = BROWSER_TOOLS.map(
+  let browserTools: Array<{ name: string }> = []
+  try {
+    const _require = createRequire(import.meta.url)
+    browserTools =
+      (_require('@ant/claude-for-chrome-mcp') as { BROWSER_TOOLS: Array<{ name: string }> })
+        .BROWSER_TOOLS ?? []
+  } catch {
+    // package not installed; allowedTools will be empty
+  }
+  const allowedTools = browserTools.map(
     tool => `mcp__claude-in-chrome__${tool.name}`,
   )
 

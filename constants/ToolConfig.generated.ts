@@ -1,0 +1,51 @@
+export const GENERATED_TOOL_REFERENCE_AT = "2026-04-19T20:40:21.548Z";
+
+export const ALL_TOOLS = [
+  "Agent",
+  "AskUserQuestion",
+  "Bash",
+  "Edit",
+  "EnterPlanMode",
+  "EnterWorktree",
+  "ExitPlanMode",
+  "ExitWorktree",
+  "Glob",
+  "Grep",
+  "ListMcpResourcesTool",
+  "NotebookEdit",
+  "Read",
+  "ReadMcpResourceTool",
+  "SendMessage",
+  "SendUserMessage",
+  "Skill",
+  "TaskOutput",
+  "TaskStop",
+  "TodoWrite",
+  "WebFetch",
+  "WebSearch",
+  "Write"
+] as const;
+
+export const ENABLED_TOOLS = [
+  "Agent",
+  "AskUserQuestion",
+  "Bash",
+  "Edit",
+  "EnterPlanMode",
+  "EnterWorktree",
+  "ExitPlanMode",
+  "ExitWorktree",
+  "Glob",
+  "Grep",
+  "ListMcpResourcesTool",
+  "NotebookEdit",
+  "Read",
+  "ReadMcpResourceTool",
+  "Skill",
+  "TaskOutput",
+  "TaskStop",
+  "TodoWrite",
+  "WebFetch",
+  "WebSearch",
+  "Write"
+] as const;

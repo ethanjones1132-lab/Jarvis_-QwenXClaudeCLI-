@@ -1,5 +1,7 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'child_process'
-import { app, BrowserWindow, ipcMain } from 'electron'
+import { createServer } from 'http'
+import * as https from 'https'
+import { app, BrowserWindow, ipcMain, shell } from 'electron'
 import { existsSync } from 'fs'
 import { mkdir } from 'fs/promises'
 import path from 'path'
@@ -79,6 +81,25 @@ function resolveWorkerCommand(): {
   }
 }
 
+/**
+ * Resolve the absolute path to ClaudeCodeCli.exe from the Electron main
+ * process — where process.execPath IS Jarvis.exe, so dirname() points at the
+ * win-unpacked directory that holds all sibling binaries.  The worker process
+ * (JarvisWorker.exe) lives in resources/bin/ and cannot derive this path
+ * reliably, so we inject it as JARVIS_CLI_EXE.
+ */
+function resolveCliExePath(): string {
+  // Packaged: ClaudeCodeCli.exe is placed next to Jarvis.exe by extraFiles
+  const siblingCli = path.join(path.dirname(process.execPath), 'ClaudeCodeCli.exe')
+  if (existsSync(siblingCli)) return siblingCli
+
+  // Dev: built binary lives in dist-desktop/ next to JarvisWorker.exe
+  const repoCli = path.join(getRepoRoot(), 'dist-desktop', 'ClaudeCodeCli.exe')
+  if (existsSync(repoCli)) return repoCli
+
+  return ''
+}
+
 async function ensureUserDataReady(): Promise<void> {
   await mkdir(app.getPath('userData'), { recursive: true })
 }
@@ -96,6 +117,8 @@ async function ensureBackend(): Promise<string> {
         ...process.env,
         CLAUDE_BODY_DESKTOP_SKIP_OPEN: '1',
         APPDATA: process.env.APPDATA ?? app.getPath('appData'),
+        JARVIS_CLI_EXE: resolveCliExePath(),
+        JARVIS_NODE_PATH: path.join(path.dirname(process.execPath), 'node_modules'),
       },
       stdio: ['ignore', 'pipe', 'pipe'],
     })
@@ -256,9 +279,14 @@ function createWindow(): BrowserWindow {
   const win = new BrowserWindow({
     width: 1560,
     height: 980,
-    minWidth: 1180,
-    minHeight: 760,
-    backgroundColor: '#070a0f',
+    minWidth: 900,
+    minHeight: 600,
+    transparent: true,
+    backgroundColor: '#151515',
+    ...(process.platform === 'darwin'
+      ? { vibrancy: 'under-window' as const }
+      : {}),
+    titleBarStyle: 'hidden',
     title: 'Jarvis',
     frame: false,
     show: false,
@@ -311,13 +339,13 @@ ipcMain.handle('jarvis:interrupt-session', () =>
   backendPost('/api/session/interrupt'),
 )
 ipcMain.handle('jarvis:stop-session', () => backendPost('/api/session/stop'))
-ipcMain.handle('jarvis:clear-transcript', () =>
-  backendPost('/api/transcript/clear'),
+ipcMain.handle('jarvis:clear-transcript', (_event, payload: unknown) =>
+  backendPost('/api/transcript/clear', payload),
 )
 ipcMain.handle(
   'jarvis:respond-to-permission',
-  (_event, requestId: string, decision: 'allow' | 'deny') =>
-    backendPost('/api/session/permission', { requestId, decision }),
+  (_event, requestId: string, decision: 'allow' | 'deny', permanent?: boolean) =>
+    backendPost('/api/session/permission', { requestId, decision, permanent: permanent === true }),
 )
 ipcMain.handle('jarvis:list-companion-profiles', () =>
   backendJson('/api/companion/profiles'),
@@ -357,14 +385,127 @@ ipcMain.handle('jarvis:maximize-window', () => {
 ipcMain.handle('jarvis:close-window', () => {
   BrowserWindow.getFocusedWindow()?.close()
 })
+ipcMain.handle('jarvis:get-platform', () => process.platform)
+ipcMain.handle('jarvis:get-sandbox-status', () => backendJson('/api/sandbox/status'))
+
+// ── Drive setup wizard IPC handlers ─────────────────────────────────────────
+ipcMain.handle('jarvis:drive-status', () =>
+  backendJson('/api/drive/status'),
+)
+ipcMain.handle('jarvis:drive-save-credentials', (_event, path: string) =>
+  backendPost('/api/drive/setup/credentials', { path }),
+)
+// Drive OAuth is handled entirely in the Electron main process so that
+// Chromium's networking stack (full Windows cert store + proxy support)
+// is used for all HTTPS calls — avoiding TLS issues with the Bun binary.
+ipcMain.handle('jarvis:drive-authorize', async () => {
+  // 1. Get auth params from backend (client_id, client_secret, auth URL)
+  const params = await backendJson<{
+    authUrl: string
+    clientId: string
+    clientSecret: string
+    redirectUri: string
+    tokenPath: string
+  }>('/api/drive/auth-params')
+
+  // 2. Spin up a local Node HTTP server on 8765 to receive the OAuth callback
+  const code = await new Promise<string>((resolve, reject) => {
+    const server = createServer((req, res) => {
+      const url = new URL(req.url ?? '/', 'http://localhost:8765')
+      if (url.pathname !== '/oauth2callback') {
+        res.writeHead(404)
+        res.end()
+        return
+      }
+      const error = url.searchParams.get('error')
+      const authCode = url.searchParams.get('code')
+      res.writeHead(200, { 'Content-Type': 'text/html' })
+      res.end(
+        '<html><body style="font-family:sans-serif;padding:40px">' +
+        (authCode
+          ? '<h2>Authorization successful!</h2><p>Jarvis is connected to Google Drive. You can close this tab.</p>'
+          : `<h2>Authorization denied.</h2><p>${error ?? 'Unknown error'}</p>`) +
+        '</body></html>',
+      )
+      server.close()
+      if (authCode) {
+        resolve(authCode)
+      } else {
+        reject(new Error(`OAuth denied: ${error ?? 'unknown'}`))
+      }
+    })
+    server.listen(8765, '127.0.0.1', () => {
+      // 3. Open browser for Google sign-in
+      void shell.openExternal(params.authUrl)
+    })
+    // 2-minute timeout
+    const timeout = setTimeout(() => {
+      server.close()
+      reject(new Error('OAuth flow timed out after 2 minutes.'))
+    }, 120_000)
+    server.on('close', () => clearTimeout(timeout))
+    server.on('error', (err) => reject(err))
+  })
+
+  // 4. Exchange auth code for tokens using Node https (Chromium cert store)
+  const token = await new Promise<Record<string, unknown>>((resolve, reject) => {
+    const body = new URLSearchParams({
+      client_id: params.clientId,
+      client_secret: params.clientSecret,
+      code,
+      redirect_uri: params.redirectUri,
+      grant_type: 'authorization_code',
+    }).toString()
+    const req = https.request(
+      {
+        hostname: 'oauth2.googleapis.com',
+        path: '/token',
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'Content-Length': Buffer.byteLength(body),
+        },
+      },
+      (res) => {
+        let data = ''
+        res.on('data', (chunk: Buffer) => { data += chunk.toString() })
+        res.on('end', () => {
+          try {
+            const parsed = JSON.parse(data) as Record<string, unknown>
+            if (res.statusCode && res.statusCode >= 400) {
+              reject(new Error(`Token exchange failed (${res.statusCode}): ${data}`))
+            } else {
+              const expiresIn = typeof parsed.expires_in === 'number' ? parsed.expires_in : 3600
+              resolve({
+                access_token: parsed.access_token,
+                refresh_token: parsed.refresh_token,
+                expires_at: Date.now() + expiresIn * 1000 - 60_000,
+                token_type: parsed.token_type ?? 'Bearer',
+                scope: parsed.scope ?? '',
+              })
+            }
+          } catch {
+            reject(new Error(`Failed to parse token response: ${data}`))
+          }
+        })
+      },
+    )
+    req.on('error', reject)
+    req.write(body)
+    req.end()
+  })
+
+  // 5. Send the completed token to the Bun backend to save + init Drive folders
+  return backendPost('/api/drive/setup/token', token)
+})
 
 // Register Thunder Compute IPC handlers
 registerThunderIpc(() => mainWindow)
 
 app.whenReady().then(async () => {
   await ensureUserDataReady()
-  void ensureBackend()
   mainWindow = createWindow()
+  void ensureBackend()
 })
 
 app.on('window-all-closed', () => {

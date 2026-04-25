@@ -11,13 +11,16 @@ const api: JarvisBridge = {
   getModels: () => ipcRenderer.invoke('jarvis:get-models'),
   checkRemoteHealth: config =>
     ipcRenderer.invoke('jarvis:check-remote-health', { config }),
-  startSession: config => ipcRenderer.invoke('jarvis:start-session', { config }),
+  startSession: (config, options) =>
+    ipcRenderer.invoke('jarvis:start-session', { config, ...options }),
   sendPrompt: content => ipcRenderer.invoke('jarvis:send-prompt', content),
   interruptSession: () => ipcRenderer.invoke('jarvis:interrupt-session'),
   stopSession: () => ipcRenderer.invoke('jarvis:stop-session'),
-  clearTranscript: () => ipcRenderer.invoke('jarvis:clear-transcript'),
-  respondToPermission: (requestId, decision) =>
-    ipcRenderer.invoke('jarvis:respond-to-permission', requestId, decision),
+  clearTranscript: options =>
+    ipcRenderer.invoke('jarvis:clear-transcript', options ?? {}),
+  respondToPermission: (requestId, decision, permanent) =>
+    ipcRenderer.invoke('jarvis:respond-to-permission', requestId, decision, permanent),
+  getSandboxStatus: () => ipcRenderer.invoke('jarvis:get-sandbox-status'),
   listCompanionProfiles: () =>
     ipcRenderer.invoke('jarvis:list-companion-profiles'),
   runCompanionAction: action =>
@@ -48,9 +51,16 @@ const api: JarvisBridge = {
       ipcRenderer.off('jarvis:backend-state', wrapped)
     }
   },
+  getPlatform: () => ipcRenderer.invoke('jarvis:get-platform'),
   minimizeWindow: () => ipcRenderer.invoke('jarvis:minimize-window'),
   maximizeWindow: () => ipcRenderer.invoke('jarvis:maximize-window'),
   closeWindow: () => ipcRenderer.invoke('jarvis:close-window'),
+
+  // Drive setup wizard
+  getDriveStatus: () => ipcRenderer.invoke('jarvis:drive-status'),
+  saveDriveCredentials: (credentialsPath: string) =>
+    ipcRenderer.invoke('jarvis:drive-save-credentials', credentialsPath),
+  authorizeDrive: () => ipcRenderer.invoke('jarvis:drive-authorize'),
 
   // Thunder Compute
   thunderOpenTerminal: () => ipcRenderer.invoke('thunder:open-terminal'),
@@ -61,8 +71,16 @@ const api: JarvisBridge = {
     ipcRenderer.invoke('thunder:health-check', publicUrl, apiKey),
   thunderCheckSession: instanceId =>
     ipcRenderer.invoke('thunder:check-session', instanceId),
-  thunderForwardPort: () => ipcRenderer.invoke('thunder:forward-port'),
+  thunderForwardPort: instanceId =>
+    ipcRenderer.invoke('thunder:forward-port', instanceId),
   thunderGetSteps: () => ipcRenderer.invoke('thunder:get-steps'),
+  // V2 snapshot-driven pathway
+  thunderStartSession: (bridgeApiKey, snapshotName) =>
+    ipcRenderer.invoke('thunder:start-session', bridgeApiKey, snapshotName),
+  thunderGetStepsV2: () => ipcRenderer.invoke('thunder:get-steps-v2'),
+  thunderAttachInstance: (instanceId, bridgeApiKey) =>
+    ipcRenderer.invoke('thunder:attach-instance', instanceId, bridgeApiKey),
+  thunderGetStepsV2Attach: () => ipcRenderer.invoke('thunder:get-steps-v2-attach'),
   onThunderSessionDetected: listener => {
     const wrapped = (_event: unknown, payload: unknown) => {
       listener(payload as never)

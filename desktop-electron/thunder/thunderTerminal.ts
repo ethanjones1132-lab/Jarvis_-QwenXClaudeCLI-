@@ -32,6 +32,11 @@ function getTerminalPreloadPath(): string {
  * Opens the terminal BrowserWindow centered on the primary display.
  * Spawns a node-pty powershell session and auto-sends `tnr create`.
  * Returns a handle to read the rolling output buffer.
+ *
+ * NOTE: modal is NOT used — on Windows it couples the child's minimize/close
+ * buttons to the parent, which is not what we want. Instead we use
+ * `parent` only (keeps the window on top of Jarvis) and disable
+ * minimize/maximize on the terminal via frame options.
  */
 export function openTerminalWindow(
   parentWindow: BrowserWindow,
@@ -55,9 +60,11 @@ export function openTerminalWindow(
     x,
     y,
     resizable: false,
+    minimizable: false,
+    maximizable: false,
     frame: true,
     title: 'Thunder Compute \u2014 Create Session',
-    modal: true,
+    // NO modal — avoids Windows coupling close/minimize to the parent
     parent: parentWindow,
     backgroundColor: '#0d1117',
     show: false,
@@ -141,22 +148,16 @@ export function openTerminalWindow(
 }
 
 /**
- * Writes a colored message to the terminal xterm, then closes after a delay.
+ * Writes a colored message directly to the xterm renderer (not through PTY).
  */
 export function writeTransitionMessage(message: string): void {
-  if (!activeTerminal) {
+  if (!activeTerminal || activeTerminal.window.isDestroyed()) {
     return
   }
-  const { pty } = activeTerminal
-  // Write green separator directly to the PTY output stream via the window
   const green = '\x1b[32m'
   const reset = '\x1b[0m'
   const separator = `\r\n${green}${'─'.repeat(60)}\r\n${message}\r\n${'─'.repeat(60)}${reset}\r\n`
-  if (!activeTerminal.window.isDestroyed()) {
-    activeTerminal.window.webContents.send('pty:data', separator)
-  }
-  // Also push to pty buffer to not break detection
-  void pty
+  activeTerminal.window.webContents.send('pty:data', separator)
 }
 
 /**

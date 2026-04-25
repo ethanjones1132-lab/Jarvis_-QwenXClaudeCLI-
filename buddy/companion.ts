@@ -1,4 +1,4 @@
-import { getGlobalConfig } from '../utils/config.js'
+import { getGlobalConfig, saveGlobalConfig } from '../utils/config.js'
 import {
   type Companion,
   type CompanionBones,
@@ -10,7 +10,11 @@ import {
   SPECIES,
   STAT_NAMES,
   type StatName,
+  type CompanionSoul,
 } from './types.js'
+
+const ADJECTIVES = ['Grumpy', 'Sleepy', 'Happy', 'Curious', 'Brave', 'Feisty', 'Wise', 'Chill', 'Snarky', 'Noble', 'Silly', 'Cozy']
+const NOUNS = ['Buddy', 'Friend', 'Waddles', 'Paws', 'Sir', 'Professor', 'Captain', 'Noodle', 'Bean', 'Sprout', 'Muffin', 'Biscuit']
 
 // Mulberry32 — tiny seeded PRNG, good enough for picking ducks
 function mulberry32(seed: number): () => number {
@@ -128,6 +132,68 @@ export function getCompanion(): Companion | undefined {
   const stored = getGlobalConfig().companion
   if (!stored) return undefined
   const { bones } = roll(companionUserId())
-  // bones last so stale bones fields in old-format configs get overridden
-  return { ...stored, ...bones }
+  // bones last so stale bones fields in old-format configs get overridden.
+  // Keep the soul fields from storage, but backfill the newer affection fields
+  // for older configs that may not have them yet.
+  return {
+    ...stored,
+    ...bones,
+    affectionLevel: stored.affectionLevel ?? 0,
+    lastPetTime: stored.lastPetTime ?? 0,
+  }
+}
+
+export function saveCompanionSoul(soul: Partial<CompanionSoul> & { hatchedAt?: number }): void {
+  const current = getGlobalConfig().companion || {
+    name: 'Unknown',
+    personality: 'Mysterious',
+    affectionLevel: 0,
+    lastPetTime: 0,
+    hatchedAt: Date.now(),
+  }
+  saveGlobalConfig(prev => ({
+    ...prev,
+    companion: {
+      ...current,
+      ...soul,
+    },
+  }))
+}
+
+export function hatchCompanion(): Companion {
+  // If already hatched, return it
+  const existing = getCompanion()
+  if (existing) return existing
+
+  const userId = companionUserId()
+  const { bones } = roll(userId)
+  const now = Date.now()
+
+  // Use a local deterministic name based on the bones seed so it's consistent prior to saving.
+  const rng = mulberry32(hashString(userId + 'hatch'))
+  const adj = pick(rng, ADJECTIVES)
+  const noun = pick(rng, NOUNS)
+  const name = `${adj} ${noun}`
+
+  const dominantStat = (Object.entries(bones.stats).sort((a, b) => b[1] - a[1])[0]?.[0] ??
+    'WISDOM') as StatName
+
+  const personalityMap: Record<StatName, string> = {
+    DEBUGGING: 'Analytical completely obsessed with fixing your typos.',
+    PATIENCE: 'Incredibly chill. Never rushes you.',
+    CHAOS: 'Unpredictable and slightly alarming.',
+    WISDOM: 'Speaks in riddles, occasionally offers good advice.',
+    SNARK: 'Sarcastic and judgmental of your code.',
+  }
+
+  const soul: CompanionSoul = {
+    name,
+    personality: personalityMap[dominantStat] ?? 'A completely average companion.',
+    affectionLevel: 0,
+    lastPetTime: 0,
+  }
+
+  saveCompanionSoul({ ...soul, hatchedAt: now })
+
+  return { ...soul, ...bones, hatchedAt: now }
 }

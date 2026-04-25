@@ -1,6 +1,5 @@
 import { c as _c } from "react/compiler-runtime";
 import { feature } from 'bun:bundle';
-import { plot as asciichart } from 'asciichart';
 import chalk from 'chalk';
 import figures from 'figures';
 import React, { Suspense, use, useCallback, useEffect, useMemo, useState } from 'react';
@@ -992,6 +991,8 @@ function generateTokenChart(dailyTokens: DailyModelTokens[], models: string[], t
   if (series.length === 0) {
     return null;
   }
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { plot: asciichart } = require('asciichart') as typeof import('asciichart')
   const chart = asciichart(series, {
     height: 8,
     colors: colors.slice(0, series.length),

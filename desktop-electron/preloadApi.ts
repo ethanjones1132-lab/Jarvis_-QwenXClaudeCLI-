@@ -42,15 +42,23 @@ export type JarvisBridge = {
   getFeatures(): Promise<DesktopFeatureSnapshot>
   getModels(): Promise<ModelCatalogResponse>
   checkRemoteHealth(config?: Partial<LauncherConfig>): Promise<RemoteBridgeHealth>
-  startSession(config?: Partial<LauncherConfig>): Promise<void>
+  startSession(
+    config?: Partial<LauncherConfig>,
+    options?: { launchIntroPrompt?: string },
+  ): Promise<void>
   sendPrompt(content: string): Promise<unknown>
   interruptSession(): Promise<void>
   stopSession(): Promise<void>
-  clearTranscript(): Promise<void>
+  clearTranscript(options?: { silent?: boolean }): Promise<void>
   respondToPermission(
     requestId: string,
     decision: 'allow' | 'deny',
+    permanent?: boolean,
   ): Promise<void>
+  getSandboxStatus(): Promise<{
+    wsl2Sandbox: { available: boolean; distro?: string; reason?: string }
+  }>
+
   listCompanionProfiles(): Promise<JarvisCompanionPayload>
   runCompanionAction(
     action: 'hatch' | 'rehatch' | 'pet' | 'mute' | 'unmute' | 'reset',
@@ -70,9 +78,27 @@ export type JarvisBridge = {
   onBackendState(
     listener: (state: { ready: boolean; url: string | null; error?: string }) => void,
   ): () => void
+  getPlatform(): Promise<string>
   minimizeWindow(): Promise<void>
   maximizeWindow(): Promise<void>
   closeWindow(): Promise<void>
+
+  // Drive setup wizard
+  getDriveStatus(): Promise<{
+    state: string
+    setupComplete: boolean
+    folderIds: Record<string, string> | null
+    steps: Array<{
+      stepIndex: number
+      total: number
+      title: string
+      instruction: string
+      requiresUserAction: boolean
+      actionLabel?: string
+    }>
+  }>
+  saveDriveCredentials(credentialsPath: string): Promise<{ ok: boolean }>
+  authorizeDrive(): Promise<{ ok: boolean; folderIds?: Record<string, string> }>
 
   // Thunder Compute
   thunderOpenTerminal(): Promise<{ ok: boolean }>
@@ -88,8 +114,22 @@ export type JarvisBridge = {
   thunderCheckSession(
     instanceId: string,
   ): Promise<{ running: boolean; instanceId: string | null }>
-  thunderForwardPort(): Promise<{ ok: boolean; error?: string }>
+  thunderForwardPort(
+    instanceId: string,
+  ): Promise<{ ok: boolean; publicUrl?: string; error?: string }>
   thunderGetSteps(): Promise<Array<{ id: ThunderStepId; label: string }>>
+  // V2 snapshot-driven pathway
+  thunderStartSession(
+    bridgeApiKey: string,
+    snapshotName?: string,
+  ): Promise<{ ok: boolean; publicUrl?: string; instanceId?: string; error?: string }>
+  thunderGetStepsV2(): Promise<Array<{ id: ThunderStepId; label: string }>>
+  // V2 attach — reconnect to an already-running instance (skips create + wait)
+  thunderAttachInstance(
+    instanceId: string,
+    bridgeApiKey: string,
+  ): Promise<{ ok: boolean; publicUrl?: string; instanceId?: string; error?: string }>
+  thunderGetStepsV2Attach(): Promise<Array<{ id: ThunderStepId; label: string }>>
   onThunderSessionDetected(
     listener: (payload: ThunderSessionDetectedPayload) => void,
   ): () => void

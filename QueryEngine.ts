@@ -45,6 +45,7 @@ import { createAbortController } from './utils/abortController.js'
 import type { AttributionState } from './utils/commitAttribution.js'
 import { getGlobalConfig } from './utils/config.js'
 import { getCwd } from './utils/cwd.js'
+import { shouldLoadHeadlessPlugins } from './utils/headlessPluginPolicy.js'
 import { isBareMode, isEnvTruthy } from './utils/envUtils.js'
 import { getFastModeState } from './utils/fastMode.js'
 import {
@@ -531,9 +532,15 @@ export class QueryEngine {
     // ref-tracked plugins. CCR populates the cache via CLAUDE_CODE_SYNC_PLUGIN_INSTALL
     // (headlessPluginInstall) or CLAUDE_CODE_PLUGIN_SEED_DIR before this runs;
     // SDK callers that need fresh source can call /reload-plugins.
+    const shouldSkipHeadlessPluginLoad = !shouldLoadHeadlessPlugins({
+      bareMode: isBareMode(),
+    })
+
     const [skills, { enabled: enabledPlugins }] = await Promise.all([
       getSlashCommandToolSkills(getCwd()),
-      loadAllPluginsCacheOnly(),
+      shouldSkipHeadlessPluginLoad
+        ? Promise.resolve({ enabled: [] })
+        : loadAllPluginsCacheOnly(),
     ])
     headlessProfilerCheckpoint('after_skills_plugins')
 

@@ -1,0 +1,1475 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Jarvis</title>
+    <style>
+      :root{
+        --bg:#07111b;
+        --bg2:#0b1624;
+        --panel:#101d2d;
+        --panel2:#142235;
+        --panel3:#0e1826;
+        --line:rgba(150,180,212,.14);
+        --lineStrong:rgba(150,180,212,.28);
+        --text:#eef4ff;
+        --muted:#8ea4bf;
+        --accent:#53d3b4;
+        --accentSoft:rgba(83,211,180,.16);
+        --warn:#ffb562;
+        --warnSoft:rgba(255,181,98,.14);
+        --danger:#ff7b89;
+        --dangerSoft:rgba(255,123,137,.14);
+        --purple:#8d8cff;
+        --purpleSoft:rgba(141,140,255,.15);
+        --shadow:0 28px 60px rgba(0,0,0,.34);
+        --radius:22px;
+        --radiusSm:14px;
+      }
+
+      *{box-sizing:border-box}
+      html,body{margin:0;min-height:100%}
+      body{
+        min-height:100vh;
+        color:var(--text);
+        background:
+          radial-gradient(circle at top left, rgba(83,211,180,.16), transparent 24%),
+          radial-gradient(circle at top right, rgba(141,140,255,.16), transparent 24%),
+          linear-gradient(180deg, #09111b, #050c14 52%, #08111c);
+        font-family:Aptos,"Segoe UI Variable Display","Segoe UI",sans-serif;
+      }
+
+      button,input,select,textarea{font:inherit}
+      h1,h2,h3,h4,p,pre{margin:0}
+      button{cursor:pointer}
+
+      .shell{
+        display:grid;
+        grid-template-columns:96px minmax(0,1fr);
+        min-height:100vh;
+      }
+
+      .sidebar{
+        border-right:1px solid var(--line);
+        background:linear-gradient(180deg, rgba(9,16,27,.96), rgba(5,11,19,.92));
+        padding:18px 14px;
+        display:flex;
+        flex-direction:column;
+        gap:18px;
+      }
+
+      .brand-mark{
+        width:52px;
+        height:52px;
+        border-radius:18px;
+        background:linear-gradient(145deg, rgba(83,211,180,.26), rgba(141,140,255,.18));
+        border:1px solid rgba(255,255,255,.08);
+        display:grid;
+        place-items:center;
+        font-size:24px;
+        font-weight:800;
+        letter-spacing:.08em;
+      }
+
+      .brand-stack{
+        display:flex;
+        flex-direction:column;
+        align-items:center;
+        gap:12px;
+      }
+
+      .brand-copy{
+        text-align:center;
+      }
+
+      .brand-name{
+        font-size:14px;
+        font-weight:700;
+        letter-spacing:.18em;
+        text-transform:uppercase;
+      }
+
+      .brand-sub{
+        margin-top:4px;
+        font-size:11px;
+        color:var(--muted);
+      }
+
+      .nav-list{
+        display:flex;
+        flex-direction:column;
+        gap:10px;
+      }
+
+      .nav-button{
+        width:100%;
+        border:1px solid transparent;
+        background:transparent;
+        color:var(--muted);
+        border-radius:18px;
+        padding:12px 10px;
+        display:flex;
+        flex-direction:column;
+        gap:6px;
+        align-items:center;
+        transition:background .18s ease,border-color .18s ease,color .18s ease,transform .18s ease;
+      }
+
+      .nav-button:hover{
+        transform:translateY(-1px);
+        background:rgba(255,255,255,.04);
+        color:var(--text);
+      }
+
+      .nav-button.active{
+        background:linear-gradient(180deg, rgba(83,211,180,.18), rgba(83,211,180,.08));
+        border-color:rgba(83,211,180,.26);
+        color:var(--text);
+      }
+
+      .nav-icon{
+        width:34px;
+        height:34px;
+        border-radius:12px;
+        background:rgba(255,255,255,.05);
+        display:grid;
+        place-items:center;
+        font-size:15px;
+        font-weight:700;
+      }
+
+      .nav-label{
+        font-size:11px;
+        text-transform:uppercase;
+        letter-spacing:.12em;
+      }
+
+      .sidebar-spacer{flex:1}
+
+      .sidebar-footer{
+        display:flex;
+        flex-direction:column;
+        gap:12px;
+      }
+
+      .sidebar-runtime,
+      .workspace-mini{
+        border:1px solid var(--line);
+        border-radius:16px;
+        padding:10px;
+        background:rgba(255,255,255,.03);
+        color:var(--muted);
+        font-size:11px;
+        line-height:1.45;
+      }
+
+      .workspace-mini strong{
+        display:block;
+        color:var(--text);
+        margin-bottom:4px;
+        font-size:10px;
+        text-transform:uppercase;
+        letter-spacing:.12em;
+      }
+
+      .ghost-button,
+      .soft-button,
+      .primary-button,
+      .danger-button{
+        border-radius:999px;
+        border:1px solid var(--line);
+        padding:10px 14px;
+        background:rgba(255,255,255,.04);
+        color:var(--text);
+      }
+
+      .ghost-button:hover,
+      .soft-button:hover,
+      .primary-button:hover,
+      .danger-button:hover{
+        transform:translateY(-1px);
+      }
+
+      .primary-button{
+        background:linear-gradient(135deg, #53d3b4, #5fb4ff);
+        color:#08111b;
+        border:none;
+        font-weight:700;
+      }
+
+      .danger-button{
+        background:rgba(255,123,137,.1);
+        color:#ffc7cf;
+        border-color:rgba(255,123,137,.24);
+      }
+
+      .surface{
+        padding:18px;
+        display:flex;
+        flex-direction:column;
+        gap:18px;
+        min-width:0;
+      }
+
+      .panel{
+        border:1px solid var(--line);
+        border-radius:var(--radius);
+        background:linear-gradient(180deg, rgba(16,29,45,.96), rgba(10,21,34,.96));
+        box-shadow:var(--shadow);
+        backdrop-filter:blur(14px);
+      }
+
+      .topbar{
+        padding:18px 20px;
+        display:flex;
+        justify-content:space-between;
+        gap:20px;
+        align-items:flex-start;
+      }
+
+      .eyebrow{
+        color:var(--muted);
+        font-size:11px;
+        font-weight:700;
+        letter-spacing:.18em;
+        text-transform:uppercase;
+      }
+
+      #viewTitle{
+        margin-top:8px;
+        font-family:"Iowan Old Style","Palatino Linotype",serif;
+        font-size:clamp(28px, 3vw, 40px);
+        line-height:1.02;
+      }
+
+      .subtle,
+      .muted{
+        color:var(--muted);
+        line-height:1.55;
+      }
+
+      .topbar-meta{
+        min-width:320px;
+        display:flex;
+        flex-direction:column;
+        gap:10px;
+        align-items:flex-end;
+      }
+
+      .status-pill,
+      .pill,
+      .chip{
+        display:inline-flex;
+        align-items:center;
+        gap:8px;
+        border-radius:999px;
+        padding:8px 12px;
+        border:1px solid var(--line);
+        background:rgba(255,255,255,.04);
+        font-size:12px;
+        font-weight:700;
+      }
+
+      .tone-running{background:var(--accentSoft); color:#b7fff0; border-color:rgba(83,211,180,.22)}
+      .tone-warning{background:var(--warnSoft); color:#ffd49e; border-color:rgba(255,181,98,.24)}
+      .tone-error{background:var(--dangerSoft); color:#ffc9d0; border-color:rgba(255,123,137,.24)}
+
+      .runtime-pills{
+        display:flex;
+        flex-wrap:wrap;
+        gap:8px;
+        justify-content:flex-end;
+      }
+
+      .workspace{
+        min-height:0;
+        display:grid;
+        grid-template-columns:minmax(0,1fr) 360px;
+        gap:18px;
+      }
+
+      .main-column{
+        min-width:0;
+        min-height:0;
+        display:grid;
+        grid-template-rows:minmax(0,1fr) auto;
+        gap:16px;
+        position:relative;
+      }
+
+      .view{
+        min-height:0;
+        display:flex;
+        flex-direction:column;
+        gap:16px;
+      }
+
+      #view-chat{
+        position:relative;
+      }
+
+      .hidden{display:none !important}
+
+      .chat-banner{
+        padding:18px 20px;
+        display:flex;
+        justify-content:space-between;
+        gap:18px;
+        align-items:flex-start;
+      }
+
+      .chat-banner h2,
+      .section-title,
+      .companion-title{
+        font-family:"Iowan Old Style","Palatino Linotype",serif;
+      }
+
+      .chat-banner h2{
+        font-size:24px;
+        margin-top:6px;
+      }
+
+      .hero-grid{
+        display:grid;
+        grid-template-columns:repeat(3, minmax(0, 1fr));
+        gap:10px;
+        width:min(440px, 100%);
+      }
+
+      .hero-stat{
+        border:1px solid var(--line);
+        border-radius:16px;
+        padding:12px;
+        background:rgba(255,255,255,.03);
+      }
+
+      .hero-stat strong{
+        display:block;
+        font-size:11px;
+        color:var(--muted);
+        text-transform:uppercase;
+        letter-spacing:.12em;
+        margin-bottom:6px;
+      }
+
+      .hero-stat span{
+        display:block;
+        font-size:15px;
+        font-weight:700;
+      }
+
+      .transcript-shell{
+        min-height:0;
+        display:grid;
+        grid-template-rows:auto minmax(0,1fr);
+        position:relative;
+      }
+
+      .transcript-toolbar{
+        padding:14px 18px;
+        border-bottom:1px solid var(--line);
+        display:flex;
+        justify-content:space-between;
+        gap:12px;
+        align-items:center;
+      }
+
+      .toolbar-actions{
+        display:flex;
+        gap:8px;
+        flex-wrap:wrap;
+      }
+
+      .scroll-region{
+        min-height:0;
+        overflow:auto;
+        padding:18px 18px 96px;
+      }
+
+      .transcript{
+        display:flex;
+        flex-direction:column;
+        gap:12px;
+        min-height:100%;
+        justify-content:flex-end;
+      }
+
+      .entry-row{
+        display:flex;
+      }
+
+      .entry-row.user{justify-content:flex-end}
+      .entry-row.assistant{justify-content:flex-start}
+      .entry-row.timeline{justify-content:center}
+
+      .entry-card{
+        max-width:min(860px, 92%);
+        border-radius:18px;
+        border:1px solid var(--line);
+        padding:14px 15px;
+        background:rgba(255,255,255,.04);
+      }
+
+      .entry-card.user{
+        background:linear-gradient(180deg, rgba(83,211,180,.15), rgba(83,211,180,.07));
+        border-color:rgba(83,211,180,.22);
+      }
+
+      .entry-card.assistant{
+        background:linear-gradient(180deg, rgba(17,31,48,.94), rgba(14,25,39,.94));
+      }
+
+      .entry-card.timeline{
+        max-width:min(780px, 100%);
+        background:rgba(255,255,255,.03);
+      }
+
+      .entry-head{
+        display:flex;
+        justify-content:space-between;
+        gap:10px;
+        align-items:flex-start;
+        margin-bottom:10px;
+        font-size:12px;
+        color:var(--muted);
+      }
+
+      .entry-head strong{
+        color:var(--text);
+      }
+
+      .entry-badges{
+        display:flex;
+        flex-wrap:wrap;
+        gap:8px;
+        margin-bottom:10px;
+      }
+
+      .entry-badges .chip{
+        padding:6px 10px;
+        font-size:11px;
+      }
+
+      .message-body{
+        white-space:pre-wrap;
+        word-break:break-word;
+        line-height:1.6;
+      }
+
+      .entry-detail{
+        margin-top:12px;
+        border-top:1px solid var(--line);
+        padding-top:10px;
+      }
+
+      .entry-detail details{
+        border-radius:14px;
+        border:1px solid var(--line);
+        background:rgba(0,0,0,.18);
+        padding:10px 12px;
+      }
+
+      .entry-detail summary{
+        cursor:pointer;
+        color:#b6c8df;
+      }
+
+      .entry-detail pre{
+        margin-top:10px;
+        white-space:pre-wrap;
+        word-break:break-word;
+        font-family:"Cascadia Code","IBM Plex Mono","Courier New",monospace;
+        color:#dce6f5;
+      }
+
+      .empty-state{
+        margin-top:auto;
+        padding:28px;
+        border-radius:18px;
+        border:1px dashed var(--lineStrong);
+        text-align:center;
+        color:var(--muted);
+        background:rgba(255,255,255,.02);
+      }
+
+      .jump-latest{
+        position:absolute;
+        right:18px;
+        bottom:18px;
+      }
+
+      .jump-latest .primary-button{
+        box-shadow:0 16px 30px rgba(0,0,0,.3);
+      }
+
+      .view-panel{
+        padding:18px 20px;
+      }
+
+      .view-grid{
+        display:grid;
+        grid-template-columns:repeat(12, minmax(0,1fr));
+        gap:16px;
+      }
+
+      .metric-card,
+      .feature-card,
+      .memory-preview,
+      .integration-card,
+      .editor-card,
+      .mini-card{
+        border:1px solid var(--line);
+        border-radius:18px;
+        background:rgba(255,255,255,.03);
+        padding:16px;
+      }
+
+      .metric-card strong,
+      .feature-card strong,
+      .mini-card strong{
+        display:block;
+        font-size:11px;
+        letter-spacing:.12em;
+        text-transform:uppercase;
+        color:var(--muted);
+        margin-bottom:8px;
+      }
+
+      .metric-value{
+        font-size:24px;
+        font-weight:700;
+      }
+
+      .metric-card span{
+        color:var(--muted);
+        font-size:13px;
+        line-height:1.5;
+      }
+
+      .context-rail{
+        display:flex;
+        flex-direction:column;
+        gap:16px;
+      }
+
+      .connect-panel,
+      .permissions-panel,
+      .companion-panel,
+      .model-panel{
+        padding:16px;
+      }
+
+      .companion-panel{
+        display:none;
+      }
+
+      .panel-header{
+        display:flex;
+        justify-content:space-between;
+        gap:10px;
+        align-items:flex-start;
+        margin-bottom:14px;
+      }
+
+      .section-kicker{
+        font-size:11px;
+        text-transform:uppercase;
+        letter-spacing:.14em;
+        color:var(--muted);
+      }
+
+      .section-title{
+        margin-top:4px;
+        font-size:22px;
+      }
+
+      .form-stack,
+      .field-group{
+        display:flex;
+        flex-direction:column;
+        gap:10px;
+      }
+
+      .field-grid{
+        display:grid;
+        grid-template-columns:1fr 1fr;
+        gap:10px;
+      }
+
+      label{
+        font-size:12px;
+        font-weight:700;
+        color:#b9cce3;
+      }
+
+      input,select,textarea{
+        width:100%;
+        border-radius:14px;
+        border:1px solid var(--line);
+        background:rgba(6,13,22,.72);
+        color:var(--text);
+        padding:11px 12px;
+      }
+
+      textarea{
+        resize:vertical;
+        min-height:90px;
+      }
+
+      .segmented{
+        display:flex;
+        gap:8px;
+        flex-wrap:wrap;
+      }
+
+      .segment{
+        border-radius:999px;
+        border:1px solid var(--line);
+        background:rgba(255,255,255,.03);
+        color:var(--muted);
+        padding:8px 12px;
+      }
+
+      .segment.active{
+        background:var(--accentSoft);
+        border-color:rgba(83,211,180,.24);
+        color:#b6fff0;
+      }
+
+      .inline-actions{
+        display:flex;
+        flex-wrap:wrap;
+        gap:8px;
+      }
+
+      .toggle-row{
+        display:flex;
+        align-items:flex-start;
+        gap:10px;
+        border-radius:16px;
+        border:1px solid var(--line);
+        padding:10px 12px;
+        background:rgba(255,255,255,.02);
+      }
+
+      .toggle-row input{
+        width:18px;
+        height:18px;
+        margin-top:2px;
+      }
+
+      .toggle-row span{
+        font-size:12px;
+        color:var(--muted);
+        line-height:1.5;
+      }
+
+      .toggle-row strong{
+        display:block;
+        color:var(--text);
+        margin-bottom:4px;
+      }
+
+      .hint{
+        color:var(--muted);
+        font-size:12px;
+        line-height:1.5;
+      }
+
+      .permission-list{
+        display:flex;
+        flex-direction:column;
+        gap:10px;
+      }
+
+      .permission-item{
+        border:1px solid var(--line);
+        border-radius:16px;
+        padding:12px;
+        background:rgba(255,255,255,.03);
+      }
+
+      .permission-item pre{
+        white-space:pre-wrap;
+        word-break:break-word;
+        color:#dbe7f7;
+        font-family:"Cascadia Code","IBM Plex Mono","Courier New",monospace;
+        margin-top:10px;
+      }
+
+      .companion-mini{
+        display:flex;
+        flex-direction:column;
+        gap:12px;
+      }
+
+      .companion-top{
+        display:flex;
+        justify-content:space-between;
+        gap:12px;
+        align-items:flex-start;
+      }
+
+      .companion-face{
+        width:44px;
+        height:44px;
+        border-radius:14px;
+        display:grid;
+        place-items:center;
+        background:rgba(141,140,255,.14);
+        border:1px solid rgba(141,140,255,.22);
+        font-family:"Cascadia Code","IBM Plex Mono","Courier New",monospace;
+        font-weight:700;
+      }
+
+      .companion-bubble{
+        border-radius:16px;
+        border:1px solid var(--line);
+        background:rgba(255,255,255,.03);
+        padding:12px;
+        color:#d8e4f3;
+        line-height:1.55;
+      }
+
+      .companion-stats{
+        display:grid;
+        grid-template-columns:1fr 1fr;
+        gap:8px;
+      }
+
+      .companion-stat{
+        padding:10px 12px;
+        border-radius:14px;
+        background:rgba(255,255,255,.03);
+        border:1px solid var(--line);
+      }
+
+      .companion-stat span{
+        display:block;
+        font-size:11px;
+        text-transform:uppercase;
+        letter-spacing:.12em;
+        color:var(--muted);
+      }
+
+      .companion-stat strong{
+        display:block;
+        margin-top:6px;
+        font-size:16px;
+      }
+
+      .sprite{
+        border-radius:16px;
+        padding:12px;
+        background:#08111b;
+        color:#e4ecf8;
+        border:1px solid var(--line);
+        font-family:"Cascadia Code","IBM Plex Mono","Courier New",monospace;
+        font-size:12px;
+        line-height:1.4;
+        white-space:pre;
+        overflow:auto;
+      }
+
+      .composer{
+        padding:14px;
+        display:grid;
+        grid-template-columns:minmax(0,1fr) auto;
+        gap:14px;
+        align-items:end;
+      }
+
+      .composer textarea{
+        min-height:110px;
+        background:rgba(4,10,18,.82);
+      }
+
+      .composer-actions{
+        display:flex;
+        flex-direction:column;
+        gap:10px;
+        min-width:150px;
+      }
+
+      .composer-meta{
+        display:flex;
+        justify-content:space-between;
+        gap:12px;
+        align-items:center;
+        margin-top:8px;
+      }
+
+      .integration-toolbar{
+        display:flex;
+        justify-content:space-between;
+        gap:12px;
+        align-items:center;
+        margin-bottom:16px;
+      }
+
+      .integration-layout{
+        display:grid;
+        grid-template-columns:340px minmax(0,1fr);
+        gap:16px;
+        min-height:0;
+      }
+
+      .integration-list{
+        display:flex;
+        flex-direction:column;
+        gap:10px;
+        max-height:60vh;
+        overflow:auto;
+      }
+
+      .integration-card{
+        cursor:pointer;
+        transition:border-color .18s ease, transform .18s ease, background .18s ease;
+      }
+
+      .integration-card:hover{
+        transform:translateY(-1px);
+        border-color:var(--lineStrong);
+      }
+
+      .integration-card.active{
+        border-color:rgba(83,211,180,.24);
+        background:rgba(83,211,180,.08);
+      }
+
+      .integration-card .card-title{
+        font-weight:700;
+      }
+
+      .integration-card .card-meta{
+        display:flex;
+        flex-wrap:wrap;
+        gap:8px;
+        margin:8px 0;
+      }
+
+      .tag-list{
+        display:flex;
+        flex-wrap:wrap;
+        gap:8px;
+        margin-top:10px;
+      }
+
+      .tag{
+        padding:5px 9px;
+        border-radius:999px;
+        background:rgba(141,140,255,.12);
+        border:1px solid rgba(141,140,255,.2);
+        font-size:11px;
+        color:#d7d8ff;
+      }
+
+      .editor-actions{
+        display:flex;
+        flex-wrap:wrap;
+        gap:8px;
+        margin-top:14px;
+      }
+
+      .companion-layout{
+        display:grid;
+        grid-template-columns:minmax(320px, 380px) minmax(0,1fr);
+        gap:16px;
+      }
+
+      .companion-hero{
+        padding:18px;
+      }
+
+      .companion-story{
+        display:grid;
+        gap:12px;
+      }
+
+      .companion-dock{
+        position:absolute;
+        right:20px;
+        bottom:150px;
+        width:min(360px, calc(100% - 40px));
+        display:flex;
+        flex-direction:column;
+        align-items:flex-end;
+        gap:10px;
+        z-index:8;
+        pointer-events:none;
+        transition:opacity .18s ease, transform .18s ease;
+      }
+
+      .companion-dock.hidden{
+        opacity:0;
+        transform:translateY(10px);
+      }
+
+      .companion-dock-bubble{
+        max-width:100%;
+        border-radius:20px 20px 4px 20px;
+        border:1px solid rgba(141,140,255,.24);
+        background:linear-gradient(180deg, rgba(141,140,255,.18), rgba(21,31,47,.92));
+        padding:12px 14px;
+        color:#edf1ff;
+        line-height:1.55;
+        box-shadow:0 18px 40px rgba(0,0,0,.34);
+      }
+
+      .companion-dock-card{
+        width:100%;
+        pointer-events:auto;
+        border-radius:20px;
+        border:1px solid var(--line);
+        background:linear-gradient(180deg, rgba(14,24,38,.96), rgba(8,15,24,.96));
+        box-shadow:0 24px 46px rgba(0,0,0,.34);
+        padding:14px;
+      }
+
+      .companion-dock-top{
+        display:flex;
+        justify-content:space-between;
+        gap:12px;
+        align-items:flex-start;
+      }
+
+      .companion-dock-name{
+        font-family:"Iowan Old Style","Palatino Linotype",serif;
+        font-size:20px;
+      }
+
+      .companion-dock-meta,
+      .companion-dock-identity{
+        color:var(--muted);
+        font-size:12px;
+        line-height:1.5;
+      }
+
+      .companion-dock-identity{
+        margin-top:10px;
+      }
+
+      .companion-dock-actions{
+        display:flex;
+        flex-wrap:wrap;
+        gap:8px;
+        margin-top:12px;
+      }
+
+      .pet-burst{
+        display:flex;
+        gap:8px;
+        padding-right:14px;
+        pointer-events:none;
+      }
+
+      .pet-heart{
+        font-size:18px;
+        color:#ffb7c6;
+        animation:petfloat 1.2s ease-out forwards;
+      }
+
+      .pet-heart:nth-child(2){animation-delay:.08s}
+      .pet-heart:nth-child(3){animation-delay:.16s}
+
+      @keyframes petfloat{
+        from{opacity:0;transform:translateY(8px) scale(.9)}
+        20%{opacity:1}
+        to{opacity:0;transform:translateY(-26px) scale(1.08)}
+      }
+
+      .companion-facts{
+        display:grid;
+        gap:10px;
+      }
+
+      .stat-glossary{
+        display:grid;
+        gap:10px;
+      }
+
+      .stat-glossary-item{
+        border:1px solid var(--line);
+        border-radius:16px;
+        padding:12px 14px;
+        background:rgba(255,255,255,.03);
+      }
+
+      .stat-glossary-item strong{
+        display:block;
+        color:var(--text);
+        margin-bottom:6px;
+      }
+
+      .list-stack{
+        display:flex;
+        flex-direction:column;
+        gap:10px;
+      }
+
+      @media (max-width: 1200px){
+        .workspace{grid-template-columns:1fr}
+        .context-rail{order:-1}
+      }
+
+      @media (max-width: 900px){
+        .shell{grid-template-columns:1fr}
+        .sidebar{
+          border-right:none;
+          border-bottom:1px solid var(--line);
+          padding:14px;
+          display:grid;
+          grid-template-columns:auto 1fr auto;
+          align-items:center;
+        }
+        .brand-stack{flex-direction:row; align-items:center}
+        .nav-list{
+          display:grid;
+          grid-template-columns:repeat(5, minmax(0,1fr));
+          gap:8px;
+        }
+        .sidebar-spacer,.sidebar-footer{display:none}
+        .surface{padding:14px}
+        .topbar{flex-direction:column}
+        .topbar-meta{
+          min-width:0;
+          align-items:flex-start;
+        }
+        .runtime-pills{justify-content:flex-start}
+        .chat-banner,
+        .integration-layout,
+        .companion-layout,
+        .field-grid,
+        .composer{
+          grid-template-columns:1fr;
+        }
+        .hero-grid{grid-template-columns:1fr}
+        .companion-dock{
+          left:14px;
+          right:14px;
+          bottom:182px;
+          width:auto;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="shell">
+      <aside class="sidebar">
+        <div class="brand-stack">
+          <div class="brand-mark">J</div>
+          <div class="brand-copy">
+            <div class="brand-name">Jarvis</div>
+            <div class="brand-sub">Remote coding desktop</div>
+          </div>
+        </div>
+
+        <nav class="nav-list">
+          <button id="navChat" class="nav-button active" type="button">
+            <span class="nav-icon">C</span>
+            <span class="nav-label">Chat</span>
+          </button>
+          <button id="navAutoDream" class="nav-button" type="button">
+            <span class="nav-icon">A</span>
+            <span class="nav-label">Dream</span>
+          </button>
+          <button id="navMemory" class="nav-button" type="button">
+            <span class="nav-icon">M</span>
+            <span class="nav-label">Memory</span>
+          </button>
+          <button id="navIntegrations" class="nav-button" type="button">
+            <span class="nav-icon">I</span>
+            <span class="nav-label">Integrations</span>
+          </button>
+          <button id="navCompanion" class="nav-button" type="button">
+            <span class="nav-icon">B</span>
+            <span class="nav-label">Companion</span>
+          </button>
+        </nav>
+
+        <div class="sidebar-spacer"></div>
+
+        <div class="sidebar-footer">
+          <div id="sidebarRuntime" class="sidebar-runtime">No session.</div>
+          <div class="workspace-mini">
+            <strong>Workspace</strong>
+            <div id="sidebarWorkspace">Loading…</div>
+          </div>
+          <button id="toggleAdvanced" class="ghost-button" type="button">Advanced settings</button>
+        </div>
+      </aside>
+
+      <section class="surface">
+        <header class="topbar panel">
+          <div>
+            <div class="eyebrow">Desktop Control</div>
+            <h1 id="viewTitle">Chat</h1>
+            <p id="sessionSummary" class="subtle">Jarvis is ready to connect to your GPT-OSS server.</p>
+          </div>
+          <div class="topbar-meta">
+            <div id="status" class="status-pill">Idle</div>
+            <div id="heroMode" class="muted">No backend selected</div>
+            <div id="headerRuntimePills" class="runtime-pills"></div>
+          </div>
+        </header>
+
+        <div class="workspace">
+          <main class="main-column">
+            <section id="view-chat" class="view">
+              <section class="chat-banner panel">
+                <div>
+                  <div class="eyebrow">Primary Runtime</div>
+                  <h2>GPT-OSS remote control</h2>
+                  <p class="subtle">Keep Jarvis chat-first, drive the local tool loop from your desktop, and route heavy reasoning through the rented server.</p>
+                </div>
+                <div class="hero-grid" id="connectionStatusCards">
+                  <div class="hero-stat">
+                    <strong>Server</strong>
+                    <span id="remoteHealthStatus">Not checked</span>
+                  </div>
+                  <div class="hero-stat">
+                    <strong>Active lane</strong>
+                    <span id="remoteHealthModel">gpt-oss-auto</span>
+                  </div>
+                  <div class="hero-stat">
+                    <strong>Fallback</strong>
+                    <span id="localFallbackLabel">Loading local models…</span>
+                  </div>
+                </div>
+              </section>
+
+              <section class="transcript-shell panel">
+                <div class="transcript-toolbar">
+                  <div id="runtimePills" class="runtime-pills"></div>
+                  <div class="toolbar-actions">
+                    <button id="checkRemoteHealth" class="soft-button" type="button">Check server</button>
+                    <button id="clearTranscript" class="ghost-button" type="button">Clear feed</button>
+                  </div>
+                </div>
+                <div id="transcriptScroll" class="scroll-region">
+                  <div id="transcript" class="transcript">
+                    <div id="chatEmptyState" class="empty-state">Connect Jarvis to your GPT-OSS server to start a session.</div>
+                  </div>
+                </div>
+                <div id="jumpLatestWrap" class="jump-latest hidden">
+                  <button id="jumpLatest" class="primary-button" type="button">Jump to latest</button>
+                </div>
+              </section>
+            </section>
+
+            <section id="view-autodream" class="view hidden">
+              <section class="panel view-panel">
+                <div class="panel-header">
+                  <div>
+                    <div class="section-kicker">AutoDream</div>
+                    <div class="section-title">Memory consolidation cadence</div>
+                  </div>
+                </div>
+                <div id="autodreamContent" class="view-grid"></div>
+              </section>
+            </section>
+
+            <section id="view-memory" class="view hidden">
+              <section class="panel view-panel">
+                <div class="panel-header">
+                  <div>
+                    <div class="section-kicker">Skeptical Memory</div>
+                    <div class="section-title">Pointer index and discipline</div>
+                  </div>
+                </div>
+                <div id="memoryContent" class="view-grid"></div>
+              </section>
+            </section>
+
+            <section id="view-integrations" class="view hidden">
+              <section class="panel view-panel">
+                <div class="panel-header">
+                  <div>
+                    <div class="section-kicker">Integrations</div>
+                    <div class="section-title">Saved API registry</div>
+                  </div>
+                </div>
+                <div class="integration-toolbar">
+                  <input id="integrationSearch" placeholder="Search integrations" />
+                  <div class="segmented">
+                    <button id="integrationFilterAll" class="segment active" type="button">All</button>
+                    <button id="integrationFilterReady" class="segment" type="button">Ready</button>
+                    <button id="integrationFilterDraft" class="segment" type="button">Draft</button>
+                    <button id="integrationFilterPaused" class="segment" type="button">Paused</button>
+                    <button id="addIntegration" class="primary-button" type="button">Add integration</button>
+                  </div>
+                </div>
+                <div class="integration-layout">
+                  <div id="integrationList" class="integration-list"></div>
+                  <div class="editor-card">
+                    <div class="panel-header">
+                      <div>
+                        <div class="section-kicker">Editor</div>
+                        <div id="integrationEditorState" class="section-title">New integration</div>
+                      </div>
+                    </div>
+                    <input id="integrationId" type="hidden" />
+                    <div class="field-grid">
+                      <div class="field-group">
+                        <label for="integrationName">Name</label>
+                        <input id="integrationName" placeholder="Internal API" />
+                      </div>
+                      <div class="field-group">
+                        <label for="integrationCategory">Category</label>
+                        <input id="integrationCategory" placeholder="Internal, Observability, Payments…" />
+                      </div>
+                    </div>
+                    <div class="field-group" style="margin-top:10px">
+                      <label for="integrationBaseUrl">Base URL</label>
+                      <input id="integrationBaseUrl" placeholder="https://api.example.com" />
+                    </div>
+                    <div class="field-grid" style="margin-top:10px">
+                      <div class="field-group">
+                        <label for="integrationAuthMode">Auth mode</label>
+                        <select id="integrationAuthMode">
+                          <option value="none">None</option>
+                          <option value="bearer">Bearer</option>
+                          <option value="api-key">API key</option>
+                          <option value="basic">Basic</option>
+                        </select>
+                      </div>
+                      <div class="field-group">
+                        <label for="integrationStatus">Status</label>
+                        <select id="integrationStatus">
+                          <option value="draft">Draft</option>
+                          <option value="ready">Ready</option>
+                          <option value="paused">Paused</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div class="field-group" style="margin-top:10px">
+                      <label for="integrationTags">Tags</label>
+                      <input id="integrationTags" placeholder="Comma-separated tags" />
+                    </div>
+                    <div class="field-group" style="margin-top:10px">
+                      <label for="integrationNotes">Notes</label>
+                      <textarea id="integrationNotes" placeholder="What this integration is for, where it points, and how Jarvis should use it later."></textarea>
+                    </div>
+                    <div class="editor-actions">
+                      <button id="saveIntegration" class="primary-button" type="button">Save integration</button>
+                      <button id="cancelIntegration" class="ghost-button" type="button">Reset</button>
+                      <button id="deleteIntegration" class="danger-button hidden" type="button">Delete</button>
+                    </div>
+                  </div>
+                </div>
+              </section>
+            </section>
+
+            <section id="view-companion" class="view hidden">
+              <section class="panel view-panel">
+                <div class="panel-header">
+                  <div>
+                    <div class="section-kicker">Companion</div>
+                    <div class="section-title">Field operator profile</div>
+                  </div>
+                </div>
+                <div class="companion-layout">
+                  <div id="companionLarge" class="companion-hero"></div>
+                  <div id="companionNotes" class="companion-story"></div>
+                </div>
+              </section>
+            </section>
+
+            <footer class="composer panel">
+              <div>
+                <div class="composer-meta">
+                  <div>
+                    <div class="eyebrow">Prompt Rail</div>
+                    <div class="subtle">Pinned composer, remote-first control, and a cleaner chat feed.</div>
+                  </div>
+                  <div id="composerModeChip" class="chip">Idle</div>
+                </div>
+                <textarea id="promptInput" placeholder="Send a prompt into the active Jarvis session. Ctrl or Cmd plus Enter also sends."></textarea>
+              </div>
+              <div class="composer-actions">
+                <button id="sendPrompt" class="primary-button" type="button">Send</button>
+                <button id="interruptSession" class="soft-button" type="button">Interrupt</button>
+                <button id="stopSession" class="danger-button" type="button">Stop</button>
+              </div>
+            </footer>
+
+            <div id="companionDock" class="companion-dock hidden">
+              <div id="companionPetBurst" class="pet-burst hidden">
+                <span class="pet-heart">&hearts;</span>
+                <span class="pet-heart">&hearts;</span>
+                <span class="pet-heart">&hearts;</span>
+              </div>
+              <div id="companionDockBubble" class="companion-dock-bubble hidden"></div>
+              <div class="companion-dock-card">
+                <div class="companion-dock-top">
+                  <div>
+                    <div class="section-kicker">Companion</div>
+                    <div id="buddyDockName" class="companion-dock-name">Dormant companion</div>
+                    <div id="buddyDockMeta" class="companion-dock-meta"></div>
+                  </div>
+                  <div id="buddyDockFace" class="companion-face"></div>
+                </div>
+                <div id="buddyDockIdentity" class="companion-dock-identity"></div>
+                <div id="buddyDockActions" class="companion-dock-actions"></div>
+              </div>
+            </div>
+          </main>
+
+          <aside class="context-rail">
+            <section class="panel connect-panel">
+              <div class="panel-header">
+                <div>
+                  <div class="section-kicker">Session Control</div>
+                  <div class="section-title">Connect Jarvis</div>
+                </div>
+                <button id="saveConfig" class="ghost-button" type="submit" form="config-form">Save</button>
+              </div>
+              <form id="config-form" class="form-stack">
+                <input id="backend" type="hidden" />
+                <div class="field-group">
+                  <label>Backend</label>
+                  <div class="segmented">
+                    <button id="backendRemote" class="segment active" type="button">Remote</button>
+                    <button id="backendLocal" class="segment" type="button">Local</button>
+                    <button id="backendAnthropic" class="segment" type="button">Anthropic</button>
+                  </div>
+                </div>
+
+                <div id="remote-fields" class="field-group">
+                  <div class="field-group">
+                    <label for="remoteGlmBaseUrl">GPT-OSS bridge URL</label>
+                    <input id="remoteGlmBaseUrl" placeholder="https://your-host:8787" />
+                  </div>
+                  <div class="field-group">
+                    <label for="remoteGlmApiKey">Bridge API key</label>
+                    <input id="remoteGlmApiKey" type="password" placeholder="Paste the Jarvis bridge key" />
+                  </div>
+                  <div class="field-group">
+                    <label>Lane</label>
+                    <input id="remoteGlmModel" type="hidden" />
+                    <div class="segmented">
+                      <button id="remoteLaneAuto" class="segment active" type="button">Auto</button>
+                      <button id="remoteLane120" class="segment" type="button">120B</button>
+                      <button id="remoteLane20" class="segment" type="button">20B</button>
+                    </div>
+                  </div>
+                </div>
+
+                <div id="ollama-fields" class="field-group hidden">
+                  <div class="field-group">
+                    <label for="ollamaBaseUrl">Ollama base URL</label>
+                    <input id="ollamaBaseUrl" placeholder="http://localhost:11434/v1" />
+                  </div>
+                  <div class="field-group">
+                    <label for="ollamaModelPreset">Installed model</label>
+                    <select id="ollamaModelPreset"></select>
+                  </div>
+                  <div class="field-group">
+                    <label for="ollamaModel">Selected local model</label>
+                    <input id="ollamaModel" placeholder="qwen2.5-coder:7b" />
+                  </div>
+                </div>
+
+                <div id="anthropic-fields" class="field-group hidden">
+                  <div class="field-group">
+                    <label for="anthropicModel">Anthropic model</label>
+                    <input id="anthropicModel" placeholder="claude-3-7-sonnet-20250219" />
+                  </div>
+                  <div class="field-group">
+                    <label for="anthropicApiKey">Anthropic API key</label>
+                    <input id="anthropicApiKey" type="password" />
+                  </div>
+                  <div class="field-group">
+                    <label for="anthropicBaseUrl">Anthropic base URL</label>
+                    <input id="anthropicBaseUrl" placeholder="Optional override" />
+                  </div>
+                </div>
+
+                <div class="inline-actions">
+                  <button id="launchSession" class="primary-button" type="button">Launch session</button>
+                  <button id="toggleAdvancedInline" class="soft-button" type="button">Advanced</button>
+                </div>
+
+                <div id="advancedSettings" class="field-group hidden">
+                  <div class="field-group">
+                    <label for="workspacePath">Workspace path</label>
+                    <input id="workspacePath" />
+                  </div>
+                  <div class="field-group">
+                    <label for="appendSystemPrompt">Extra system prompt</label>
+                    <textarea id="appendSystemPrompt" placeholder="Compatibility notes, workflow rules, or repo-specific instructions."></textarea>
+                  </div>
+                  <label class="toggle-row">
+                    <input id="coordinatorMode" type="checkbox" />
+                    <span><strong>Coordinator mode</strong>Enable the leaked worker orchestration path for native-tool sessions.</span>
+                  </label>
+                  <label class="toggle-row">
+                    <input id="disableToolsForLocal" type="checkbox" />
+                    <span><strong>Disable local tools</strong>Use the safer local chat path while Jarvis keeps remote execution primary.</span>
+                  </label>
+                  <label class="toggle-row">
+                    <input id="enableExperimentalLocalTools" type="checkbox" />
+                    <span><strong>Experimental local tools</strong>Keep the true local harness available for testing and loop-guard validation.</span>
+                  </label>
+                  <label class="toggle-row">
+                    <input id="disableNonessentialTraffic" type="checkbox" />
+                    <span><strong>Quiet runtime</strong>Suppress unrelated traffic and reduce session noise.</span>
+                  </label>
+                  <label class="toggle-row">
+                    <input id="disableThinkingForLocal" type="checkbox" />
+                    <span><strong>Suppress local thinking</strong>Keep smaller fallback models focused on visible output.</span>
+                  </label>
+                </div>
+              </form>
+            </section>
+
+            <section class="panel model-panel">
+              <div class="panel-header">
+                <div>
+                  <div class="section-kicker">Fallback</div>
+                  <div class="section-title">Local model status</div>
+                </div>
+              </div>
+              <div id="modelSpotlight"></div>
+            </section>
+
+            <section id="permissionDock" class="panel permissions-panel hidden">
+              <div class="panel-header">
+                <div>
+                  <div class="section-kicker">Safety</div>
+                  <div class="section-title">Pending permissions</div>
+                </div>
+                <div id="permissionCount" class="chip">0</div>
+              </div>
+              <div id="permissionList" class="permission-list"></div>
+            </section>
+
+            <section class="panel companion-panel">
+              <div class="panel-header">
+                <div>
+                  <div class="section-kicker">Companion</div>
+                  <div class="section-title">Mission rail</div>
+                </div>
+              </div>
+              <div class="companion-mini">
+                <div class="companion-top">
+                  <div>
+                    <div id="buddyName" class="companion-title">Companion loading…</div>
+                    <div id="buddyMeta" class="muted"></div>
+                  </div>
+                  <div id="buddyFace" class="companion-face"></div>
+                </div>
+                <div id="buddyBubble" class="companion-bubble">Standing by.</div>
+                <pre id="buddySprite" class="sprite"></pre>
+                <div id="buddyStats" class="companion-stats"></div>
+              </div>
+            </section>
+          </aside>
+        </div>
+      </section>
+    </div>
+
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>

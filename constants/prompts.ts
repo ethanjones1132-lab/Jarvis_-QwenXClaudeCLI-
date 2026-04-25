@@ -44,6 +44,7 @@ import {
   getScratchpadDir,
 } from '../utils/permissions/filesystem.js'
 import { isEnvTruthy } from '../utils/envUtils.js'
+import { getCompatibilityPromptAddendum } from '../utils/apiCompatibility.js'
 import { isReplModeEnabled } from '../tools/REPLTool/constants.js'
 import { feature } from 'bun:bundle'
 import { getFeatureValue_CACHED_MAY_BE_STALE } from 'src/services/analytics/growthbook.js'
@@ -441,6 +442,11 @@ function getSimpleToneAndStyleSection(): string {
   return [`# Tone and style`, ...prependBullets(items)].join(`\n`)
 }
 
+function getCompatibilitySection(): string | null {
+  const addendum = getCompatibilityPromptAddendum()
+  return addendum ? `# Compatibility\n${addendum}` : null
+}
+
 export async function getSystemPrompt(
   tools: Tools,
   model: string,
@@ -567,6 +573,7 @@ ${CYBER_RISK_INSTRUCTION}`,
       : null,
     getActionsSection(),
     getUsingYourToolsSection(enabledTools),
+    getCompatibilitySection(),
     getSimpleToneAndStyleSection(),
     getOutputEfficiencySection(),
     // === BOUNDARY MARKER - DO NOT MOVE OR REMOVE ===
@@ -737,7 +744,7 @@ function getShellInfoLine(): string {
       ? 'bash'
       : shell
   if (env.platform === 'win32') {
-    return `Shell: ${shellName} (use Unix shell syntax, not Windows — e.g., /dev/null not NUL, forward slashes in paths)`
+    return `Shell: ${shellName} (running on Windows; use Windows-native executable lookup when appropriate, e.g. where.exe or Get-Command instead of whereis)`
   }
   return `Shell: ${shellName}`
 }

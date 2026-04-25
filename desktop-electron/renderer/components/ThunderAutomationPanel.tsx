@@ -6,6 +6,7 @@
  */
 
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { AnimatePresence, motion } from 'framer-motion'
 import type {
   ThunderStepId,
   ThunderStepUpdatePayload,
@@ -15,25 +16,76 @@ import type {
 type StepDisplay = {
   id: ThunderStepId
   label: string
-  state: 'pending' | 'active' | 'done' | 'error'
+  state: 'pending' | 'active' | 'done' | 'error' | 'skipped'
   startedAt: number | null
   error: string | null
 }
 
+type AutomationInvokeResult = {
+  ok: boolean
+  publicUrl?: string
+  instanceId?: string
+  error?: string
+}
+
+export function buildThunderInvokeFallbackErrorStep(
+  steps: StepDisplay[],
+  error: string | null | undefined,
+  now = Date.now(),
+): StepDisplay | null {
+  if (!error) {
+    return null
+  }
+
+  if (steps.some(step => step.state === 'error')) {
+    return null
+  }
+
+  const anchor =
+    [...steps].reverse().find(step => step.state === 'active')
+    ?? [...steps].reverse().find(step => step.state === 'done')
+    ?? steps[steps.length - 1]
+
+  if (!anchor) {
+    return null
+  }
+
+  return {
+    ...anchor,
+    state: 'error',
+    error,
+    startedAt: anchor.startedAt ?? now,
+  }
+}
+
 type ThunderAutomationPanelProps = {
-  instanceId: string
+  /** Pre-known instance ID (V1 / resume flow). Omit or pass '' for V2 new-session flow. */
+  instanceId?: string
   bridgeApiKey: string
   onComplete: (publicUrl: string, instanceId: string) => void
   onAbort: () => void
+  /**
+   * 'v2' (default) — snapshot-driven: create instance + poll /healthz.
+   * 'v1' — legacy SSH-orchestrated path for resume flow.
+   * 'attach' — reconnect to an already-running instance (3 steps: forward-port → poll-healthz → attach).
+   */
+  mode?: 'v1' | 'v2' | 'attach'
 }
 
 export function ThunderAutomationPanel({
-  instanceId,
+  instanceId: instanceIdProp = '',
   bridgeApiKey,
   onComplete,
   onAbort,
+  mode = 'v2',
 }: ThunderAutomationPanelProps): React.ReactElement {
+  // In V2 mode, instanceId is not known until create-instance completes;
+  // we resolve it from the automation result and display it in the badge.
+  const [resolvedInstanceId, setResolvedInstanceId] = useState(instanceIdProp)
+  const instanceId = resolvedInstanceId || instanceIdProp
   const [steps, setSteps] = useState<StepDisplay[]>([])
+  const stepsRef = useRef<StepDisplay[]>([])
+  const [stepsReady, setStepsReady] = useState(false)
   const [logs, setLogs] = useState<string[]>([])
   const [activeStepLabel, setActiveStepLabel] = useState('')
   const [elapsedMs, setElapsedMs] = useState(0)
@@ -43,21 +95,47 @@ export function ThunderAutomationPanel({
   const logEndRef = useRef<HTMLDivElement>(null)
   const autoScrollRef = useRef(true)
   const logContainerRef = useRef<HTMLDivElement>(null)
+  const [logScrolledUp, setLogScrolledUp] = useState(false)
+  // Guard: prevents concurrent or duplicate automation invocations when
+  // the `mode` prop changes while the panel is already mounted (which would
+  // reset stepsReady false→true and re-fire the automation effect).
+  const automationStartedRef = useRef(false)
+
+  useEffect(() => {
+    stepsRef.current = steps
+  }, [steps])
 
   // Initialize steps from main process
   useEffect(() => {
-    void window.jarvis.thunderGetSteps().then(stepDefs => {
-      setSteps(
-        stepDefs.map(s => ({
+    let cancelled = false
+    setStepsReady(false)
+    automationStartedRef.current = false  // reset on mode change so new mode can start
+    const fetchSteps = mode === 'v2'
+      ? window.jarvis.thunderGetStepsV2()
+      : mode === 'attach'
+      ? window.jarvis.thunderGetStepsV2Attach()
+      : window.jarvis.thunderGetSteps()
+    void fetchSteps.then(stepDefs => {
+      if (cancelled) {
+        return
+      }
+      const nextSteps = stepDefs.map(s => ({
           id: s.id,
           label: s.label,
           state: 'pending' as const,
           startedAt: null,
           error: null,
-        })),
-      )
+        }))
+      stepsRef.current = nextSteps
+      setSteps(nextSteps)
+      setStepsReady(true)
     })
-  }, [])
+    return () => {
+      cancelled = true
+      automationStartedRef.current = false  // reset on cleanup so remount can start fresh
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode])
 
   // Subscribe to step updates
   useEffect(() => {
@@ -81,6 +159,9 @@ export function ThunderAutomationPanel({
             }
             if (payload.state === 'error') {
               setErrorStep(updated)
+            }
+            if (payload.state === 'skipped' && s.id === 'system-prep') {
+              setErrorStep(null)
             }
             return updated
           }),
@@ -121,8 +202,9 @@ export function ThunderAutomationPanel({
 
   // Auto-scroll logs
   useLayoutEffect(() => {
-    if (autoScrollRef.current && logEndRef.current) {
-      logEndRef.current.scrollIntoView({ behavior: 'smooth' })
+    const el = logContainerRef.current
+    if (autoScrollRef.current && el) {
+      el.scrollTop = el.scrollHeight
     }
   }, [logs])
 
@@ -134,26 +216,63 @@ export function ThunderAutomationPanel({
     }
     const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 40
     autoScrollRef.current = atBottom
+    setLogScrolledUp(!atBottom)
   }
 
-  // Start automation on mount
+  function scrollLogToBottom(): void {
+    const el = logContainerRef.current
+    if (!el) return
+    el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' })
+    autoScrollRef.current = true
+    setLogScrolledUp(false)
+  }
+
+  // Start automation once steps are ready — guarded against concurrent/duplicate
+  // invocations that can occur when `mode` changes while the panel is mounted.
   useEffect(() => {
+    if (!stepsReady) {
+      return
+    }
+    if (automationStartedRef.current) {
+      return
+    }
+    automationStartedRef.current = true
     void runAutomation()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [stepsReady])
 
   async function runAutomation(): Promise<void> {
     setRetrying(false)
     setErrorStep(null)
-    const result = await window.jarvis.thunderBeginAutomation(
-      instanceId,
-      bridgeApiKey,
-    )
+    let result: AutomationInvokeResult
+    if (mode === 'v2') {
+      result = await window.jarvis.thunderStartSession(bridgeApiKey)
+    } else if (mode === 'attach') {
+      result = await window.jarvis.thunderAttachInstance(instanceIdProp, bridgeApiKey)
+    } else {
+      result = await window.jarvis.thunderBeginAutomation(instanceIdProp, bridgeApiKey)
+    }
     if (result.ok && result.publicUrl && result.instanceId) {
+      setResolvedInstanceId(result.instanceId)
       setCompleted(true)
       onComplete(result.publicUrl, result.instanceId)
+      return
     }
-    // Errors are handled via step-update events
+
+    const fallbackError = buildThunderInvokeFallbackErrorStep(
+      stepsRef.current,
+      result.error ?? 'Thunder automation failed before the panel received a step error update.',
+    )
+    if (fallbackError) {
+      setSteps(prev => prev.map(step => (
+        step.id === fallbackError.id
+          ? fallbackError
+          : step
+      )))
+      setActiveStepLabel('')
+      setElapsedMs(0)
+      setErrorStep(fallbackError)
+    }
   }
 
   function handleRetry(): void {
@@ -167,7 +286,13 @@ export function ThunderAutomationPanel({
         startedAt: null,
       })),
     )
+    setActiveStepLabel('')
+    setElapsedMs(0)
     setLogs([])
+    if (mode === 'v2') {
+      // V2 creates a fresh instance on retry — clear the resolved ID
+      setResolvedInstanceId('')
+    }
     void runAutomation()
   }
 
@@ -190,9 +315,16 @@ export function ThunderAutomationPanel({
     return mins > 0 ? `${mins}m ${s}s` : `${s}s`
   }
 
-  // Determine vLLM loading status for special display
-  const vllmStep = steps.find(s => s.id === 'poll-vllm')
+  // Determine loading status for special display
+  // V2: show model-load status during poll-healthz; V1: poll-vllm
+  const vllmStep = steps.find(s => s.id === (mode !== 'v1' ? 'poll-healthz' : 'poll-vllm'))
   const isVllmLoading = vllmStep?.state === 'active'
+  const isProcessLive =
+    !completed &&
+    !errorStep &&
+    (Boolean(activeStepLabel) ||
+      logs.length > 0 ||
+      steps.some(step => step.state === 'active'))
   const lastLogLine = logs.length > 0 ? logs[logs.length - 1] : ''
 
   return (
@@ -200,7 +332,11 @@ export function ThunderAutomationPanel({
       <div style={headerStyle}>
         <div style={titleRowStyle}>
           <span style={titleStyle}>Thunder Compute</span>
-          <span style={instanceBadgeStyle}>{instanceId}</span>
+          {instanceId ? (
+            <span style={instanceBadgeStyle}>{instanceId}</span>
+          ) : (
+            <span style={{ ...instanceBadgeStyle, opacity: 0.5 }}>creating…</span>
+          )}
         </div>
         {activeStepLabel && !completed && !errorStep && (
           <div style={activeStepRowStyle}>
@@ -214,6 +350,50 @@ export function ThunderAutomationPanel({
             Model loading &mdash; {lastLogLine.slice(0, 120)}
           </div>
         )}
+        <AnimatePresence initial={false}>
+          {isProcessLive && (
+            <motion.div
+              key="live-connection"
+              initial={{ opacity: 0, y: -6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -4 }}
+              transition={{ duration: 0.2, ease: 'easeOut' }}
+              style={liveStatusStyle}
+            >
+              <motion.span
+                aria-hidden="true"
+                animate={{ scale: [1, 1.14, 1], opacity: [0.58, 1, 0.58] }}
+                transition={{ duration: 1.45, repeat: Infinity, ease: 'easeInOut' }}
+                style={liveStatusDotStyle}
+              />
+              <div style={liveStatusCopyStyle}>
+                <span style={liveStatusLabelStyle}>Connection stable</span>
+                <span style={liveStatusSubtextStyle}>
+                  {isVllmLoading
+                    ? (mode === 'v1'
+                        ? 'vLLM is loading inside the snapshot and the tunnel is staying warm.'
+                        : 'Model is loading on the GPU — waiting for /healthz to report ready.')
+                    : 'Keeping the remote session warm while the bridge finishes wiring up.'}
+                </span>
+              </div>
+              <div aria-hidden="true" style={liveStatusBarsStyle}>
+                {[0, 1, 2].map(i => (
+                  <motion.span
+                    key={i}
+                    animate={{ scaleY: [0.72, 1.38, 0.72], opacity: [0.45, 1, 0.45] }}
+                    transition={{
+                      duration: 1.15,
+                      repeat: Infinity,
+                      delay: i * 0.14,
+                      ease: 'easeInOut',
+                    }}
+                    style={liveStatusBarStyle}
+                  />
+                ))}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
         {completed && (
           <div style={successBannerStyle}>
             Session active. Jarvis is connected.
@@ -230,6 +410,8 @@ export function ThunderAutomationPanel({
                 ? '\u2713'
                 : step.state === 'error'
                   ? '\u2717'
+                  : step.state === 'skipped'
+                    ? '\u21b7'
                   : step.state === 'active'
                     ? '\u25CF'
                     : '\u25CB'}
@@ -246,9 +428,12 @@ export function ThunderAutomationPanel({
                         ? 'var(--danger)'
                         : 'var(--muted)',
               }}
-            >
+              >
               {step.label}
             </span>
+            {step.state === 'skipped' && step.error && (
+              <span style={skippedReasonStyle}>{step.error}</span>
+            )}
           </div>
         ))}
       </div>
@@ -276,17 +461,31 @@ export function ThunderAutomationPanel({
       )}
 
       {/* Log pane */}
-      <div
-        ref={logContainerRef}
-        style={logPaneStyle}
-        onScroll={handleLogScroll}
-      >
-        {logs.map((line, i) => (
-          <div key={i} style={logLineStyle}>
-            {line}
+      <div style={logPaneWrapperStyle}>
+        <div
+          ref={logContainerRef}
+          style={logPaneStyle}
+          onScroll={handleLogScroll}
+        >
+          {/* Inner flex column with justify-content: flex-end so lines
+              grow upward from the bottom, matching the main chat window */}
+          <div style={logInnerStyle}>
+            {logs.map((line, i) => (
+              <div key={i} style={logLineStyle}>
+                {line}
+              </div>
+            ))}
+            <div ref={logEndRef} />
           </div>
-        ))}
-        <div ref={logEndRef} />
+        </div>
+        {logScrolledUp && (
+          <button
+            style={logScrollBtnStyle}
+            onClick={scrollLogToBottom}
+          >
+            ↓ Back to bottom
+          </button>
+        )}
       </div>
     </div>
   )
@@ -299,7 +498,9 @@ export function ThunderAutomationPanel({
 const panelStyle: React.CSSProperties = {
   display: 'flex',
   flexDirection: 'column',
-  height: '100%',
+  flex: 1,
+  minHeight: 0,
+  height: 'auto',
   background: 'var(--bg-2)',
   borderRadius: 'var(--radius-lg)',
   border: '1px solid var(--line)',
@@ -369,6 +570,67 @@ const vllmStatusStyle: React.CSSProperties = {
   textOverflow: 'ellipsis',
 }
 
+const liveStatusStyle: React.CSSProperties = {
+  marginTop: 10,
+  display: 'flex',
+  alignItems: 'center',
+  gap: 12,
+  padding: '10px 12px',
+  borderRadius: 'var(--radius-sm)',
+  border: '1px solid rgba(0, 229, 255, 0.18)',
+  background:
+    'linear-gradient(180deg, rgba(0, 229, 255, 0.08), rgba(0, 229, 255, 0.03))',
+}
+
+const liveStatusDotStyle: React.CSSProperties = {
+  width: 10,
+  height: 10,
+  borderRadius: 999,
+  background: 'var(--accent)',
+  boxShadow: '0 0 0 6px rgba(0, 229, 255, 0.12)',
+  flex: '0 0 auto',
+}
+
+const liveStatusCopyStyle: React.CSSProperties = {
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 3,
+  minWidth: 0,
+  flex: 1,
+}
+
+const liveStatusLabelStyle: React.CSSProperties = {
+  fontSize: 12,
+  fontWeight: 700,
+  letterSpacing: '0.06em',
+  textTransform: 'uppercase',
+  color: 'var(--accent-strong)',
+}
+
+const liveStatusSubtextStyle: React.CSSProperties = {
+  fontSize: 12,
+  color: 'var(--muted)',
+  whiteSpace: 'nowrap',
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+}
+
+const liveStatusBarsStyle: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'flex-end',
+  gap: 3,
+  height: 16,
+  flex: '0 0 auto',
+}
+
+const liveStatusBarStyle: React.CSSProperties = {
+  width: 3,
+  height: 16,
+  borderRadius: 999,
+  background: 'rgba(0, 229, 255, 0.8)',
+  transformOrigin: 'center bottom',
+}
+
 const successBannerStyle: React.CSSProperties = {
   marginTop: 10,
   fontSize: 14,
@@ -384,6 +646,7 @@ const stepsContainerStyle: React.CSSProperties = {
   borderBottom: '1px solid var(--line)',
   maxHeight: 260,
   overflowY: 'auto',
+  minHeight: 0,
 }
 
 const stepRowStyle: React.CSSProperties = {
@@ -394,7 +657,7 @@ const stepRowStyle: React.CSSProperties = {
 }
 
 function stepIconStyle(
-  state: 'pending' | 'active' | 'done' | 'error',
+  state: 'pending' | 'active' | 'done' | 'error' | 'skipped',
 ): React.CSSProperties {
   return {
     width: 18,
@@ -406,6 +669,8 @@ function stepIconStyle(
         ? 'var(--success)'
         : state === 'error'
           ? 'var(--danger)'
+          : state === 'skipped'
+            ? 'var(--muted)'
           : state === 'active'
             ? 'var(--accent)'
             : 'var(--muted)',
@@ -414,6 +679,13 @@ function stepIconStyle(
 
 const stepLabelStyle: React.CSSProperties = {
   fontSize: 13,
+}
+
+const skippedReasonStyle: React.CSSProperties = {
+  marginLeft: 6,
+  fontSize: 11,
+  color: 'var(--muted)',
+  fontStyle: 'italic',
 }
 
 const errorPanelStyle: React.CSSProperties = {
@@ -468,18 +740,67 @@ const abortButtonStyle: React.CSSProperties = {
   cursor: 'pointer',
 }
 
+// Outer wrapper — relative so the scroll-to-bottom button can be positioned
+const logPaneWrapperStyle: React.CSSProperties = {
+  position: 'relative',
+  flex: 1,
+  minHeight: 0,
+  display: 'flex',
+  flexDirection: 'column',
+  background: 'var(--bg)',
+}
+
+// Scrollable viewport
 const logPaneStyle: React.CSSProperties = {
   flex: 1,
-  padding: '12px 24px',
+  minHeight: 0,
   overflowY: 'auto',
+  overflowX: 'hidden',
+  scrollbarWidth: 'thin',
+  scrollbarColor: 'rgba(161,161,170,0.2) transparent',
+  scrollbarGutter: 'stable',
+  overflowAnchor: 'none',
+  overscrollBehavior: 'contain',
+  padding: '12px 24px',
   fontFamily: "'Cascadia Code', 'Consolas', monospace",
   fontSize: 11,
   lineHeight: 1.6,
   color: 'var(--muted)',
-  background: 'var(--bg)',
+}
+
+// Inner column — justify-content: flex-end anchors new lines to the bottom
+// so old lines scroll out of view upward (mirrors main chat window behavior)
+const logInnerStyle: React.CSSProperties = {
+  display: 'flex',
+  flexDirection: 'column',
+  justifyContent: 'flex-end',
+  minHeight: '100%',
+  gap: 0,
+  overflowAnchor: 'none',
 }
 
 const logLineStyle: React.CSSProperties = {
   whiteSpace: 'pre-wrap',
   wordBreak: 'break-all',
+}
+
+// "Back to bottom" pill — appears when user scrolls up in the log pane
+const logScrollBtnStyle: React.CSSProperties = {
+  position: 'absolute',
+  bottom: 14,
+  left: '50%',
+  transform: 'translateX(-50%)',
+  padding: '7px 16px',
+  borderRadius: 999,
+  border: '1px solid rgba(0, 229, 255, 0.28)',
+  background: 'rgba(21, 21, 21, 0.92)',
+  backdropFilter: 'blur(14px)',
+  color: 'var(--accent-strong)',
+  fontSize: 11,
+  fontWeight: 500,
+  cursor: 'pointer',
+  boxShadow: '0 4px 18px rgba(0,0,0,0.5)',
+  pointerEvents: 'auto',
+  whiteSpace: 'nowrap',
+  zIndex: 10,
 }

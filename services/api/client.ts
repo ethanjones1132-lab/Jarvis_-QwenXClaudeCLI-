@@ -10,6 +10,7 @@ import {
   refreshAndGetAwsCredentials,
   refreshGcpCredentialsIfNeeded,
 } from 'src/utils/auth.js'
+import { normalizeAnthropicCompatibilityBaseUrl } from 'src/utils/apiCompatibility.js'
 import { getUserAgent } from 'src/utils/http.js'
 import { getSmallFastModel } from 'src/utils/model/model.js'
 import {
@@ -83,6 +84,22 @@ function createStderrLogger(): ClientOptions['logger'] {
       // biome-ignore lint/suspicious/noConsole:: intentional console output -- SDK logger must use console
       console.error('[Anthropic SDK DEBUG]', msg, ...args),
   }
+}
+
+function getConfiguredAnthropicBaseUrl(): string | undefined {
+  const configuredBaseUrl = process.env.ANTHROPIC_BASE_URL?.trim()
+  if (configuredBaseUrl) {
+    return normalizeAnthropicCompatibilityBaseUrl(configuredBaseUrl)
+  }
+
+  if (
+    process.env.USER_TYPE === 'ant' &&
+    isEnvTruthy(process.env.USE_STAGING_OAUTH)
+  ) {
+    return getOauthConfig().BASE_API_URL
+  }
+
+  return undefined
 }
 
 export async function getAnthropicClient({
@@ -298,16 +315,13 @@ export async function getAnthropicClient({
   }
 
   // Determine authentication method based on available tokens
+  const baseURL = getConfiguredAnthropicBaseUrl()
   const clientConfig: ConstructorParameters<typeof Anthropic>[0] = {
     apiKey: isClaudeAISubscriber() ? null : apiKey || getAnthropicApiKey(),
     authToken: isClaudeAISubscriber()
       ? getClaudeAIOAuthTokens()?.accessToken
       : undefined,
-    // Set baseURL from OAuth config when using staging OAuth
-    ...(process.env.USER_TYPE === 'ant' &&
-    isEnvTruthy(process.env.USE_STAGING_OAUTH)
-      ? { baseURL: getOauthConfig().BASE_API_URL }
-      : {}),
+    ...(baseURL ? { baseURL } : {}),
     ...ARGS,
     ...(isDebugToStdErr() && { logger: createStderrLogger() }),
   }

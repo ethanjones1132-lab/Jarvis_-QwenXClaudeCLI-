@@ -1,11 +1,5 @@
 import { type ChildProcess, spawn } from 'child_process'
-import {
-  createMessageConnection,
-  type MessageConnection,
-  StreamMessageReader,
-  StreamMessageWriter,
-  Trace,
-} from 'vscode-jsonrpc/node.js'
+import type { MessageConnection } from 'vscode-jsonrpc/node.js'
 import type {
   InitializeParams,
   InitializeResult,
@@ -178,6 +172,9 @@ export function createLSPClient(
         })
 
         // 2. Create JSON-RPC connection
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { createMessageConnection, StreamMessageReader, StreamMessageWriter, Trace } =
+          require('vscode-jsonrpc/node.js') as typeof import('vscode-jsonrpc/node.js')
         const reader = new StreamMessageReader(process.stdout)
         const writer = new StreamMessageWriter(process.stdin)
         connection = createMessageConnection(reader, writer)

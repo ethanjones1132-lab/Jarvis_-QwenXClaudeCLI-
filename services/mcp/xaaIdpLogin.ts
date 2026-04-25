@@ -1,8 +1,8 @@
-/**
- * XAA IdP Login — acquires an OIDC id_token from an enterprise IdP via the
+﻿/**
+ * XAA IdP Login â€” acquires an OIDC id_token from an enterprise IdP via the
  * standard authorization_code + PKCE flow, then caches it by IdP issuer.
  *
- * This is the "one browser pop" in the XAA value prop: one IdP login → N silent
+ * This is the "one browser pop" in the XAA value prop: one IdP login â†’ N silent
  * MCP server auths. The id_token is cached in the keychain and reused until expiry.
  */
 
@@ -41,7 +41,7 @@ export type XaaIdpSettings = {
 
 /**
  * Typed accessor for settings.xaaIdp. The field is env-gated in SettingsSchema
- * so it doesn't surface in SDK types/docs — which means the inferred settings
+ * so it doesn't surface in SDK types/docs â€” which means the inferred settings
  * type doesn't have it at compile time. This is the one cast.
  */
 export function getXaaIdpSettings(): XaaIdpSettings | undefined {
@@ -64,13 +64,13 @@ export type IdpLoginOptions = {
   /**
    * Fixed callback port. If omitted, a random port is chosen.
    * Use this when the IdP client is pre-registered with a specific loopback
-   * redirect URI (RFC 8252 §7.3 says IdPs SHOULD accept any port for
+   * redirect URI (RFC 8252 Â§7.3 says IdPs SHOULD accept any port for
    * http://localhost, but many don't).
    */
   callbackPort?: number
   /** Called with the authorization URL before (or instead of) opening the browser */
   onAuthorizationUrl?: (url: string) => void
-  /** If true, don't auto-open the browser — just call onAuthorizationUrl */
+  /** If true, don't auto-open the browser â€” just call onAuthorizationUrl */
   skipBrowserOpen?: boolean
   abortSignal?: AbortSignal
 }
@@ -123,7 +123,7 @@ function saveIdpIdToken(
 }
 
 /**
- * Save an externally-obtained id_token into the XAA cache — the exact slot
+ * Save an externally-obtained id_token into the XAA cache â€” the exact slot
  * getCachedIdpIdToken/acquireIdpIdToken read from. Used by conformance testing
  * where the mock IdP hands us a pre-signed token but doesn't serve /authorize.
  *
@@ -151,7 +151,7 @@ export function clearIdpIdToken(idpIssuer: string): void {
 
 /**
  * Save an IdP client secret to secure storage, keyed by IdP issuer.
- * Separate from MCP server AS secrets — different trust domain.
+ * Separate from MCP server AS secrets â€” different trust domain.
  * Returns the storage update result so callers can surface keychain
  * failures (locked keychain, `security` nonzero exit) instead of
  * silently dropping the secret and failing later with invalid_client.
@@ -193,7 +193,7 @@ export function clearIdpClientSecret(idpIssuer: string): void {
   storage.update(existing)
 }
 
-// OIDC Discovery §4.1 says `{issuer}/.well-known/openid-configuration` — path
+// OIDC Discovery Â§4.1 says `{issuer}/.well-known/openid-configuration` â€” path
 // APPEND, not replace. `new URL('/.well-known/...', issuer)` with a leading
 // slash is a WHATWG absolute-path reference and drops the issuer's pathname,
 // breaking Azure AD (`login.microsoftonline.com/{tenant}/v2.0`), Okta custom
@@ -246,7 +246,7 @@ export async function discoverOidc(
  * token endpoint. The IdP validates its own token there. An attacker who
  * can mint a token that fools the IdP has no need to fool us first; an
  * attacker who can't, hands us garbage and gets a 401 from the IdP. The
- * --id-token injection seam is likewise safe: bad input → rejected later,
+ * --id-token injection seam is likewise safe: bad input â†’ rejected later,
  * no privesc. Client-side verification would add code and no security.
  */
 function jwtExp(jwt: string): number | undefined {
@@ -266,7 +266,7 @@ function jwtExp(jwt: string): number | undefined {
  * Wait for the OAuth authorization code on a local callback server.
  * Returns the code once /callback is hit with a matching state.
  *
- * `onListening` fires after the socket is actually bound — use it to defer
+ * `onListening` fires after the socket is actually bound â€” use it to defer
  * browser-open so EADDRINUSE surfaces before a spurious tab pops open.
  */
 function waitForCallback(
@@ -336,7 +336,7 @@ function waitForCallback(
         res.end(
           `<html><body><h3>IdP login failed</h3><p>${safeErr}</p><p>${safeDesc}</p></body></html>`,
         )
-        rejectOnce(new Error(`XAA IdP: ${err}${desc ? ` — ${desc}` : ''}`))
+        rejectOnce(new Error(`XAA IdP: ${err}${desc ? ` â€” ${desc}` : ''}`))
         return
       }
 
@@ -356,7 +356,7 @@ function waitForCallback(
 
       res.writeHead(200, { 'Content-Type': 'text/html' })
       res.end(
-        '<html><body><h3>IdP login complete — you can close this window.</h3></body></html>',
+        '<html><body><h3>IdP login complete â€” you can close this window.</h3></body></html>',
       )
       resolveOnce(code)
     })
@@ -431,7 +431,7 @@ export async function acquireIdpIdToken(
     },
   )
 
-  // Open the browser only after the socket is actually bound — listen() is
+  // Open the browser only after the socket is actually bound â€” listen() is
   // async, and on the fixed-callbackPort path EADDRINUSE otherwise surfaces
   // after a spurious tab has already popped. Mirrors the auth.ts pattern of
   // wrapping sdkAuth inside server.listen's callback.
@@ -485,3 +485,4 @@ export async function acquireIdpIdToken(
 
   return tokens.id_token
 }
+

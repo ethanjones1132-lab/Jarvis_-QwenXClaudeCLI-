@@ -1,0 +1,173 @@
+- generic [ref=e2]:
+  - complementary [ref=e3]:
+    - generic [ref=e4]:
+      - generic [ref=e5]: J
+      - generic [ref=e6]:
+        - generic [ref=e7]: Jarvis
+        - generic [ref=e8]: Remote coding desktop
+    - navigation [ref=e9]:
+      - button "C Chat" [ref=e10] [cursor=pointer]:
+        - generic [ref=e11]: C
+        - generic [ref=e12]: Chat
+      - button "A Dream" [ref=e13] [cursor=pointer]:
+        - generic [ref=e14]: A
+        - generic [ref=e15]: Dream
+      - button "M Memory" [ref=e16] [cursor=pointer]:
+        - generic [ref=e17]: M
+        - generic [ref=e18]: Memory
+      - button "I Integrations" [ref=e19] [cursor=pointer]:
+        - generic [ref=e20]: I
+        - generic [ref=e21]: Integrations
+      - button "B Companion" [ref=e22] [cursor=pointer]:
+        - generic [ref=e23]: B
+        - generic [ref=e24]: Companion
+    - generic [ref=e26]:
+      - generic [ref=e27]:
+        - strong [ref=e29]: Runtime
+        - generic [ref=e30]: Idle
+        - generic [ref=e31]: Local Fallback / qwopus3.5-9b-v3:q4km
+      - generic [ref=e32]:
+        - strong [ref=e33]: Workspace
+        - generic [ref=e34]: C:\Users\ethan\OneDrive\Documents\GitHub\claude-code-src-leaked
+      - button "Advanced settings" [ref=e35] [cursor=pointer]
+  - generic [ref=e36]:
+    - generic [ref=e37]:
+      - generic [ref=e38]:
+        - generic [ref=e39]: Desktop Control
+        - heading "Mission Control" [level=1] [ref=e40]
+        - paragraph [ref=e41]: Jarvis is ready to connect your desktop tool loop to the remote GPT-OSS server.
+      - generic [ref=e42]:
+        - generic [ref=e43]: Idle
+        - generic [ref=e44]: Local Fallback / qwopus3.5-9b-v3:q4km
+        - generic [ref=e45]:
+          - generic [ref=e46]: Local Fallback
+          - generic [ref=e47]: Bridge status pending
+          - generic [ref=e48]: Coordinator off
+    - generic [ref=e49]:
+      - main [ref=e50]:
+        - generic [ref=e51]:
+          - generic [ref=e52]:
+            - generic [ref=e53]:
+              - generic [ref=e54]: Primary Runtime
+              - heading "GPT-OSS remote control" [level=2] [ref=e55]
+              - paragraph [ref=e56]: Keep Jarvis chat-first, drive the local tool loop from your desktop, and route heavy reasoning through the rented server.
+            - generic [ref=e57]:
+              - generic [ref=e58]:
+                - strong [ref=e59]: Server
+                - generic [ref=e60]: Not checked
+              - generic [ref=e61]:
+                - strong [ref=e62]: Active lane
+                - generic [ref=e63]: Auto
+              - generic [ref=e64]:
+                - strong [ref=e65]: Fallback
+                - generic [ref=e66]: Qwen2.5 Coder 7B
+          - generic [ref=e67]:
+            - generic [ref=e68]:
+              - generic [ref=e70]: Idle
+              - generic [ref=e71]:
+                - button "Check server" [ref=e72] [cursor=pointer]
+                - button "Clear feed" [ref=e73] [cursor=pointer]
+            - generic [ref=e76]: Connect Jarvis to your GPT-OSS server to start a session.
+        - generic [ref=e77]:
+          - generic [ref=e78]:
+            - generic [ref=e79]:
+              - generic [ref=e80]:
+                - generic [ref=e81]: Prompt Rail
+                - generic [ref=e82]: Pinned composer, remote-first control, and a cleaner chat feed.
+              - generic [ref=e83]: Idle
+            - textbox "Launch a session first, then send a prompt into Jarvis." [ref=e84]
+          - generic [ref=e85]:
+            - button "Send" [disabled] [ref=e86] [cursor=pointer]
+            - button "Interrupt" [disabled] [ref=e87] [cursor=pointer]
+            - button "Stop" [disabled] [ref=e88] [cursor=pointer]
+      - complementary [ref=e89]:
+        - generic [ref=e90]:
+          - generic [ref=e91]:
+            - generic [ref=e92]:
+              - generic [ref=e93]: Session Control
+              - generic [ref=e94]: Connect Jarvis
+            - button "Save" [ref=e95] [cursor=pointer]
+          - generic [ref=e96]:
+            - generic [ref=e97]:
+              - generic [ref=e98]: Backend
+              - generic [ref=e99]:
+                - button "Remote" [ref=e100] [cursor=pointer]
+                - button "Local" [ref=e101] [cursor=pointer]
+                - button "Anthropic" [ref=e102] [cursor=pointer]
+            - generic [ref=e103]:
+              - generic [ref=e104]:
+                - generic [ref=e105]: Ollama base URL
+                - textbox "Ollama base URL" [ref=e106]:
+                  - /placeholder: http://localhost:11434/v1
+                  - text: http://localhost:11434/v1
+              - generic [ref=e107]:
+                - generic [ref=e108]: Installed model
+                - combobox "Installed model" [ref=e109]:
+                  - option "Qwen2.5 Coder 7B"
+                  - option "Qwopus 3.5 9B v3 (not installed)" [selected]
+                  - option "deepseek-r1:7b"
+              - generic [ref=e110]:
+                - generic [ref=e111]: Selected local model
+                - textbox "Selected local model" [ref=e112]:
+                  - /placeholder: qwen2.5-coder:7b
+                  - text: qwopus3.5-9b-v3:q4km
+            - generic [ref=e113]:
+              - button "Launch local fallback" [ref=e114] [cursor=pointer]
+              - button "Advanced" [ref=e115] [cursor=pointer]
+        - generic [ref=e116]:
+          - generic [ref=e118]:
+            - generic [ref=e119]: Fallback
+            - generic [ref=e120]: Local model status
+          - generic [ref=e121]:
+            - generic [ref=e122]:
+              - strong [ref=e123]: Recommended local model
+              - generic [ref=e124]: Qwen2.5 Coder 7B
+              - generic [ref=e125]:
+                - generic [ref=e126]: Installed
+                - generic [ref=e127]: safe
+                - generic [ref=e128]: candidate-for-tools
+              - paragraph [ref=e129]: Best fallback local model for Jarvis. It is the fastest clean coding model in the current local stack and the safest default when the remote GPT-OSS server is unavailable.
+            - generic [ref=e130]:
+              - strong [ref=e131]: Alternate local model
+              - generic [ref=e132]: Qwopus 3.5 9B v3
+              - generic [ref=e133]:
+                - generic [ref=e134]: Not installed
+                - generic [ref=e135]: safe
+                - generic [ref=e136]: ready-for-chat
+              - paragraph [ref=e137]: Legacy heavyweight local reasoning model. Keep it available for comparison or experimentation, but it is no longer the preferred default for the Jarvis desktop shell.
+            - generic [ref=e138]:
+              - strong [ref=e139]: Alternate local model
+              - generic [ref=e140]: deepseek-r1:7b
+              - generic [ref=e141]:
+                - generic [ref=e142]: Installed
+                - generic [ref=e143]: safe
+                - generic [ref=e144]: candidate-for-tools
+              - paragraph [ref=e145]: Installed locally. Custom model with no launcher-specific tuning profile yet.
+        - generic [ref=e146]:
+          - generic [ref=e148]:
+            - generic [ref=e149]: Companion
+            - generic [ref=e150]: Mission rail
+          - generic [ref=e151]:
+            - generic [ref=e152]:
+              - generic [ref=e153]:
+                - generic [ref=e154]: Duck Scout
+                - generic [ref=e155]: Uncommon duck / pokes strange edges until the system reveals itself
+              - generic [ref=e156]: (@>
+            - generic [ref=e157]: Standing by to support the next run.
+            - generic [ref=e158]: "__ <(@ )___ ( ._> `--'"
+            - generic [ref=e159]:
+              - generic [ref=e160]:
+                - generic [ref=e161]: DEBUGGING
+                - strong [ref=e162]: "11"
+              - generic [ref=e163]:
+                - generic [ref=e164]: PATIENCE
+                - strong [ref=e165]: "63"
+              - generic [ref=e166]:
+                - generic [ref=e167]: CHAOS
+                - strong [ref=e168]: "79"
+              - generic [ref=e169]:
+                - generic [ref=e170]: WISDOM
+                - strong [ref=e171]: "12"
+              - generic [ref=e172]:
+                - generic [ref=e173]: SNARK
+                - strong [ref=e174]: "40"

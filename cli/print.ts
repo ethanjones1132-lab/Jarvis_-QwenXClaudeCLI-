@@ -158,6 +158,7 @@ import {
 } from 'src/utils/sessionStart.js'
 import {
   DEFAULT_OUTPUT_STYLE_NAME,
+  OUTPUT_STYLE_CONFIG,
   getAllOutputStyles,
 } from 'src/constants/outputStyles.js'
 import { TEAMMATE_MESSAGE_TAG, TICK_TAG } from 'src/constants/xml.js'
@@ -598,7 +599,12 @@ export async function runHeadless(
   // #34044: if user explicitly set sandbox.enabled=true but deps are missing,
   // isSandboxingEnabled() returns false silently. Surface the reason so users
   // know their security config isn't being enforced.
-  const sandboxUnavailableReason = SandboxManager.getSandboxUnavailableReason()
+  const useFastInitialize = isEnvTruthy(process.env.CLAUDE_CODE_FAST_INIT)
+  const sandboxRequired = SandboxManager.isSandboxRequired()
+  const sandboxUnavailableReason =
+    useFastInitialize && !sandboxRequired
+      ? undefined
+      : SandboxManager.getSandboxUnavailableReason()
   if (sandboxUnavailableReason) {
     if (SandboxManager.isSandboxRequired()) {
       process.stderr.write(
@@ -612,17 +618,41 @@ export async function runHeadless(
       `\n⚠ Sandbox disabled: ${sandboxUnavailableReason}\n` +
         `  Commands will run WITHOUT sandboxing. Network and filesystem restrictions will NOT be enforced.\n\n`,
     )
-  } else if (SandboxManager.isSandboxingEnabled()) {
+  } else if (
+    // Check the cheap flag first — avoids isSandboxingEnabled() subprocess
+    // probe in fast-init / shared-runtime mode where the else-if body is
+    // unreachable anyway.
+    (!useFastInitialize || sandboxRequired) &&
+    SandboxManager.isSandboxingEnabled()
+  ) {
     // Initialize sandbox with a callback that forwards network permission
     // requests to the SDK host via the can_use_tool control_request protocol.
     // This must happen after structuredIO is created so we can send requests.
     try {
-      await SandboxManager.initialize(structuredIO.createSandboxAskCallback())
+      if (false) {
+        void SandboxManager.initialize(structuredIO.createSandboxAskCallback())
+          .catch(err => {
+            process.stderr.write(`\nâŒ Sandbox Error: ${errorMessage(err)}\n`)
+          })
+      } else {
+        await SandboxManager.initialize(structuredIO.createSandboxAskCallback())
+      }
     } catch (err) {
       process.stderr.write(`\n❌ Sandbox Error: ${errorMessage(err)}\n`)
       gracefulShutdownSync(1, 'other')
       return
     }
+  }
+
+  if (useFastInitialize && !sandboxRequired) {
+    // Optional sandbox bootstrap for shared-local mode.
+    // Defer it to the next tick so initialize can respond first.
+    setTimeout(() => {
+      void SandboxManager.initialize(structuredIO.createSandboxAskCallback())
+        .catch(err => {
+          process.stderr.write(`\n❌ Sandbox Error: ${errorMessage(err)}\n`)
+        })
+    }, 0)
   }
 
   if (options.outputFormat === 'stream-json' && options.verbose) {
@@ -4428,10 +4458,13 @@ async function handleInitializeRequest(
 
   const settings = getSettings_DEPRECATED()
   const outputStyle = settings?.outputStyle || DEFAULT_OUTPUT_STYLE_NAME
-  const availableOutputStyles = await getAllOutputStyles(getCwd())
+  const useFastInitialize = isEnvTruthy(process.env.CLAUDE_CODE_FAST_INIT)
+  const availableOutputStyles = useFastInitialize
+    ? OUTPUT_STYLE_CONFIG
+    : await getAllOutputStyles(getCwd())
 
   // Get account information
-  const accountInfo = getAccountInformation()
+  const accountInfo = useFastInitialize ? undefined : getAccountInformation()
   if (request.hooks) {
     const hooks: Partial<Record<HookEvent, HookCallbackMatcher[]>> = {}
     for (const [event, matchers] of Object.entries(request.hooks)) {

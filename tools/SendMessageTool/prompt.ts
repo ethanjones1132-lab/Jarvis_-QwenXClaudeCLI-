@@ -24,6 +24,8 @@ A listed peer is alive and will process your message — no "busy" state; messag
 
 Send a message to another agent.
 
+Use this only for agent-to-agent communication. Do not use it to narrate, relay, or proxy an unrelated tool invocation; if a tool should run, call that tool directly.
+
 \`\`\`json
 {"to": "researcher", "summary": "assign task 1", "message": "start on task #1"}
 \`\`\`

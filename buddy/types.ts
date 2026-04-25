@@ -111,6 +111,8 @@ export type CompanionBones = {
 export type CompanionSoul = {
   name: string
   personality: string
+  affectionLevel: number
+  lastPetTime: number
 }
 
 export type Companion = CompanionBones &

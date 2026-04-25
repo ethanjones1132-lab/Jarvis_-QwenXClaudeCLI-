@@ -1,8 +1,15 @@
 import { feature } from 'bun:bundle'
-import type { Message } from '../types/message.js'
 import type { Attachment } from '../utils/attachments.js'
 import { getGlobalConfig } from '../utils/config.js'
 import { getCompanion } from './companion.js'
+
+type BuddyAttachmentMessage = {
+  type: 'attachment'
+  attachment: {
+    type: string
+    name?: string
+  }
+}
 
 export function companionIntroText(name: string, species: string): string {
   return `# Companion
@@ -13,7 +20,7 @@ When the user addresses ${name} directly (by name), its bubble will answer. Your
 }
 
 export function getCompanionIntroAttachment(
-  messages: Message[] | undefined,
+  messages: BuddyAttachmentMessage[] | undefined,
 ): Attachment[] {
   if (!feature('BUDDY')) return []
   const companion = getCompanion()

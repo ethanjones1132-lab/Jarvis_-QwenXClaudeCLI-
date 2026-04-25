@@ -55,6 +55,11 @@ import {
   splitSysPromptPrefix,
   toolToAPISchema,
 } from '../../utils/api.js'
+import {
+  shouldIncludeToolChoiceForRequest,
+  shouldDisablePromptCachingForCompatibility,
+  shouldStripAnthropicOnlyRequestFields,
+} from '../../utils/apiCompatibility.js'
 import { getOauthAccountInfo } from '../../utils/auth.js'
 import {
   getBedrockExtraBodyParamsBetas,
@@ -327,10 +332,20 @@ export function getExtraBodyParams(betaHeaders?: string[]): JsonObject {
     }
   }
 
+  if (shouldStripAnthropicOnlyRequestFields()) {
+    delete result.anthropic_beta
+    delete result.context_management
+    delete result.metadata
+    delete result.output_config
+    delete result.speed
+  }
+
   return result
 }
 
 export function getPromptCachingEnabled(model: string): boolean {
+  if (shouldDisablePromptCachingForCompatibility()) return false
+
   // Global disable takes precedence
   if (isEnvTruthy(process.env.DISABLE_PROMPT_CACHING)) return false
 
@@ -500,7 +515,11 @@ export function configureTaskBudgetParams(
   }
 }
 
-export function getAPIMetadata() {
+export function getAPIMetadata(): { user_id: string } | undefined {
+  if (shouldStripAnthropicOnlyRequestFields()) {
+    return undefined
+  }
+
   // https://docs.google.com/document/d/1dURO9ycXXQCBS0V4Vhl4poDBRgkelFc5t2BNPoEgH5Q/edit?tab=t.0#heading=h.5g7nec5b09w5
   let extra: JsonObject = {}
   const extraStr = process.env.CLAUDE_CODE_EXTRA_METADATA
@@ -551,6 +570,7 @@ export async function verifyApiKey(
           }),
         async anthropic => {
           const messages: MessageParam[] = [{ role: 'user', content: 'test' }]
+          const apiMetadata = getAPIMetadata()
           // biome-ignore lint/plugin: API key verification is intentionally a minimal direct call
           await anthropic.beta.messages.create({
             model,
@@ -558,7 +578,7 @@ export async function verifyApiKey(
             messages,
             temperature: 1,
             ...(betas.length > 0 && { betas }),
-            metadata: getAPIMetadata(),
+            ...(apiMetadata && { metadata: apiMetadata }),
             ...getExtraBodyParams(),
           })
           return true
@@ -1536,10 +1556,12 @@ async function* queryModel(
   let lastRequestBetas: string[] | undefined
 
   const paramsFromContext = (retryContext: RetryContext) => {
-    const betasParams = [...betas]
+    const compatibilityModeActive = shouldStripAnthropicOnlyRequestFields()
+    const betasParams = compatibilityModeActive ? [] : [...betas]
 
     // Append 1M beta dynamically for the Sonnet 1M experiment.
     if (
+      !compatibilityModeActive &&
       !betasParams.includes(CONTEXT_1M_BETA_HEADER) &&
       getSonnet1mExpTreatmentEnabled(retryContext.model)
     ) {
@@ -1560,23 +1582,29 @@ async function* queryModel(
       ...((extraBodyParams.output_config as BetaOutputConfig) ?? {}),
     }
 
-    configureEffortParams(
-      effort,
-      outputConfig,
-      extraBodyParams,
-      betasParams,
-      options.model,
-    )
+    if (!compatibilityModeActive) {
+      configureEffortParams(
+        effort,
+        outputConfig,
+        extraBodyParams,
+        betasParams,
+        options.model,
+      )
 
-    configureTaskBudgetParams(
-      options.taskBudget,
-      outputConfig as BetaOutputConfig & { task_budget?: TaskBudgetParam },
-      betasParams,
-    )
+      configureTaskBudgetParams(
+        options.taskBudget,
+        outputConfig as BetaOutputConfig & { task_budget?: TaskBudgetParam },
+        betasParams,
+      )
+    }
 
     // Merge outputFormat into extraBodyParams.output_config alongside effort
     // Requires structured-outputs beta header per SDK (see parse() in messages.mjs)
-    if (options.outputFormat && !('format' in outputConfig)) {
+    if (
+      !compatibilityModeActive &&
+      options.outputFormat &&
+      !('format' in outputConfig)
+    ) {
       outputConfig.format = options.outputFormat as BetaJSONOutputFormat
       // Add beta header if not already present and provider supports it
       if (
@@ -1630,14 +1658,21 @@ async function* queryModel(
     }
 
     // Get API context management strategies if enabled
-    const contextManagement = getAPIContextManagement({
-      hasThinking,
-      isRedactThinkingActive: betasParams.includes(REDACT_THINKING_BETA_HEADER),
-      clearAllThinking: thinkingClearLatched,
-    })
+    const contextManagement = compatibilityModeActive
+      ? undefined
+      : getAPIContextManagement({
+          hasThinking,
+          isRedactThinkingActive: betasParams.includes(
+            REDACT_THINKING_BETA_HEADER,
+          ),
+          clearAllThinking: thinkingClearLatched,
+        })
 
     const enablePromptCaching =
-      options.enablePromptCaching ?? getPromptCachingEnabled(retryContext.model)
+      compatibilityModeActive
+        ? false
+        : options.enablePromptCaching ??
+          getPromptCachingEnabled(retryContext.model)
 
     // Fast mode: header is latched session-stable (cache-safe), but
     // `speed='fast'` stays dynamic so cooldown still suppresses the actual
@@ -1652,7 +1687,11 @@ async function* queryModel(
     if (isFastModeForRetry) {
       speed = 'fast'
     }
-    if (fastModeHeaderLatched && !betasParams.includes(FAST_MODE_BETA_HEADER)) {
+    if (
+      !compatibilityModeActive &&
+      fastModeHeaderLatched &&
+      !betasParams.includes(FAST_MODE_BETA_HEADER)
+    ) {
       betasParams.push(FAST_MODE_BETA_HEADER)
     }
 
@@ -1660,6 +1699,7 @@ async function* queryModel(
     // by isAgenticQuery per-call so classifiers/compaction don't get it.
     if (feature('TRANSCRIPT_CLASSIFIER')) {
       if (
+        !compatibilityModeActive &&
         afkHeaderLatched &&
         shouldIncludeFirstPartyOnlyBetas() &&
         isAgenticQuery &&
@@ -1677,6 +1717,7 @@ async function* queryModel(
       getAPIProvider() === 'firstParty' &&
       options.querySource === 'repl_main_thread'
     if (
+      !compatibilityModeActive &&
       cacheEditingHeaderLatched &&
       getAPIProvider() === 'firstParty' &&
       options.querySource === 'repl_main_thread' &&
@@ -1696,6 +1737,8 @@ async function* queryModel(
 
     lastRequestBetas = betasParams
 
+    const apiMetadata = getAPIMetadata()
+
     return {
       model: normalizeModelStringForAPI(options.model),
       messages: addCacheBreakpoints(
@@ -1708,23 +1751,30 @@ async function* queryModel(
         options.skipCacheWrite,
       ),
       system,
-      tools: allTools,
-      tool_choice: options.toolChoice,
-      ...(useBetas && { betas: betasParams }),
-      metadata: getAPIMetadata(),
+      ...(allTools.length > 0 && { tools: allTools }),
+      ...(shouldIncludeToolChoiceForRequest({
+        hasTools: allTools.length > 0,
+        toolChoice: options.toolChoice,
+      }) && {
+        tool_choice: options.toolChoice,
+      }),
+      ...(useBetas && !compatibilityModeActive && { betas: betasParams }),
+      ...(apiMetadata && { metadata: apiMetadata }),
       max_tokens: maxOutputTokens,
       thinking,
       ...(temperature !== undefined && { temperature }),
       ...(contextManagement &&
         useBetas &&
+        !compatibilityModeActive &&
         betasParams.includes(CONTEXT_MANAGEMENT_BETA_HEADER) && {
           context_management: contextManagement,
         }),
       ...extraBodyParams,
-      ...(Object.keys(outputConfig).length > 0 && {
+      ...(!compatibilityModeActive &&
+        Object.keys(outputConfig).length > 0 && {
         output_config: outputConfig,
       }),
-      ...(speed !== undefined && { speed }),
+      ...(!compatibilityModeActive && speed !== undefined && { speed }),
     }
   }
 

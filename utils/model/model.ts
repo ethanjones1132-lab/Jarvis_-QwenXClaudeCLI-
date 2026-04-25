@@ -474,11 +474,7 @@ export function parseUserSpecifiedModel(
   // alias already resolves to 4.6, so the only users on these explicit
   // strings pinned them in settings/env/--model/SDK before 4.5 launched.
   // 3P providers may not yet have 4.6 capacity, so pass through unchanged.
-  if (
-    getAPIProvider() === 'firstParty' &&
-    isLegacyOpusFirstParty(modelString) &&
-    isLegacyModelRemapEnabled()
-  ) {
+  if (getAPIProvider() === 'firstParty' && isLegacyOpusFirstParty(modelString) && isLegacyModelRemapEnabled()) {
     return getDefaultOpusModel() + (has1mTag ? '[1m]' : '')
   }
 

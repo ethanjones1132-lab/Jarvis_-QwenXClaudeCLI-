@@ -1,17 +1,16 @@
 /**
- * Thunder Compute — Phase 1 Session Detection
+ * Thunder Compute - Phase 1 Session Detection
  *
- * Polls `tnr status` to detect when a new instance reaches running state.
- * Uses pty output as a corroborating signal to increase poll frequency.
+ * Polls `tnr status --no-wait` to detect when a new instance reaches running state.
+ * Uses PTY output as a corroborating signal to increase poll frequency.
+ *
+ * IMPORTANT: `tnr status` without --no-wait is an interactive live monitor that
+ * never exits. Always use --no-wait for polling.
  */
 
 import { exec } from 'child_process'
 import { getPtyOutputBuffer } from './thunderTerminal.js'
-
-type TnrInstance = {
-  id: string
-  status: string
-}
+import { parseTnrStatus, type TnrInstance } from './thunderStatus.js'
 
 type DetectionState = {
   baselineIds: Set<string>
@@ -30,67 +29,23 @@ const state: DetectionState = {
 }
 
 /**
- * Parse `tnr status` output into instance list.
- * Format varies — we look for lines with instance IDs and status keywords.
- */
-function parseTnrStatus(stdout: string): TnrInstance[] {
-  const instances: TnrInstance[] = []
-  const lines = stdout.split('\n')
-
-  for (const line of lines) {
-    const trimmed = line.trim()
-    if (!trimmed || trimmed.startsWith('─') || trimmed.startsWith('=')) {
-      continue
-    }
-
-    // Try to match table-like rows: ID  | status | ...
-    // Common patterns: "i-abc123  running  gpu-type ..."
-    // or tabular: "0  i-abc123  running"
-    const idMatch = trimmed.match(
-      /\b(i-[a-zA-Z0-9]+)\b/,
-    )
-    if (!idMatch) {
-      continue
-    }
-
-    const id = idMatch[1]
-    const lowerLine = trimmed.toLowerCase()
-    let status = 'unknown'
-    if (
-      lowerLine.includes('running') ||
-      lowerLine.includes('active') ||
-      lowerLine.includes('online')
-    ) {
-      status = 'running'
-    } else if (
-      lowerLine.includes('creating') ||
-      lowerLine.includes('pending') ||
-      lowerLine.includes('starting')
-    ) {
-      status = 'starting'
-    } else if (
-      lowerLine.includes('stopped') ||
-      lowerLine.includes('terminated')
-    ) {
-      status = 'stopped'
-    }
-
-    instances.push({ id, status })
-  }
-
-  return instances
-}
-
-/**
- * Execute `tnr status` and return parsed instances.
+ * Execute `tnr status --no-wait` and return parsed instances.
+ * The --no-wait flag is critical - without it, tnr status enters
+ * an interactive live monitor that never exits.
  */
 function pollTnrStatus(): Promise<TnrInstance[]> {
   return new Promise(resolve => {
-    exec('tnr status', { timeout: 15_000 }, (error, stdout) => {
+    exec('tnr status --no-wait', { timeout: 15_000 }, (error, stdout, stderr) => {
       if (error) {
+        // Log stderr for debugging but don't fail - tnr might just have no instances.
+        if (stderr && stderr.trim()) {
+          console.error('[thunder-detection] tnr status stderr:', stderr.trim())
+        }
         resolve([])
         return
       }
+
+      console.log('[thunder-detection] tnr status raw:', stdout)
       resolve(parseTnrStatus(stdout))
     })
   })
@@ -112,7 +67,11 @@ function checkPtyForCompletionHints(): boolean {
     lower.includes('mode:') ||
     lower.includes('gpu type:') ||
     lower.includes('disk size:') ||
-    lower.includes('✓')
+    lower.includes('creating') ||
+    lower.includes('provisioning') ||
+    lower.includes('instance created') ||
+    lower.includes('\u2713') ||
+    lower.includes('success')
   )
 }
 
@@ -126,25 +85,22 @@ function checkPtyForCompletionHints(): boolean {
 export async function startDetection(
   onDetected: (instanceId: string) => void,
 ): Promise<() => void> {
-  // Reset state
   state.resolved = false
   state.fastPolling = false
   state.onDetected = onDetected
 
-  // Capture baseline
   const baselineInstances = await pollTnrStatus()
   state.baselineIds = new Set(baselineInstances.map(inst => inst.id))
+  console.log('[thunder-detection] baseline instance IDs:', [...state.baselineIds])
 
-  // Start polling at 6s intervals
   const runPoll = async (): Promise<void> => {
     if (state.resolved) {
       return
     }
 
-    // Check PTY hints to potentially switch to fast polling
     if (!state.fastPolling && checkPtyForCompletionHints()) {
+      console.log('[thunder-detection] PTY hints detected, switching to fast polling')
       state.fastPolling = true
-      // Restart interval at faster rate
       if (state.pollInterval) {
         clearInterval(state.pollInterval)
       }
@@ -152,12 +108,14 @@ export async function startDetection(
     }
 
     const instances = await pollTnrStatus()
+    console.log(
+      '[thunder-detection] poll result:',
+      instances.map(i => `${i.id}=${i.status}`).join(', ') || '(none)',
+    )
+
     for (const inst of instances) {
-      if (
-        inst.status === 'running' &&
-        !state.baselineIds.has(inst.id)
-      ) {
-        // New running instance detected
+      if (inst.status === 'running' && !state.baselineIds.has(inst.id)) {
+        console.log('[thunder-detection] NEW RUNNING INSTANCE:', inst.id)
         state.resolved = true
         if (state.pollInterval) {
           clearInterval(state.pollInterval)
@@ -170,7 +128,6 @@ export async function startDetection(
   }
 
   state.pollInterval = setInterval(() => void runPoll(), 6_000)
-  // Run once immediately
   void runPoll()
 
   return () => {

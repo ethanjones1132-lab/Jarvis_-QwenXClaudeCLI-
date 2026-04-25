@@ -180,6 +180,19 @@ export type DiffTool = 'terminal' | 'auto'
 
 export type OutputStyle = string
 
+export type JarvisCompanionProfile = {
+  id: string
+  name: string
+  personality: string
+  species: import('../buddy/types.js').Species
+  eye: import('../buddy/types.js').Eye
+  hat: import('../buddy/types.js').Hat
+  shiny: boolean
+  rarity: import('../buddy/types.js').Rarity
+  createdAt: number
+  updatedAt: number
+}
+
 export type GlobalConfig = {
   /**
    * @deprecated Use settings.apiKeyHelper instead.
@@ -269,6 +282,8 @@ export type GlobalConfig = {
   // /buddy companion soul — bones regenerated from userId on read. See src/buddy/.
   companion?: import('../buddy/types.js').StoredCompanion
   companionMuted?: boolean
+  jarvisCompanionProfiles?: JarvisCompanionProfile[]
+  jarvisActiveCompanionProfileId?: string
 
   // Feedback survey tracking
   feedbackSurveyState?: {

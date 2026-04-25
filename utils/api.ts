@@ -484,6 +484,12 @@ export async function logContextMetrics(
   if (isAnalyticsDisabled()) {
     return
   }
+  if (
+    isEnvTruthy(process.env.CLAUDE_CODE_SIMPLE) ||
+    isEnvTruthy(process.env.CLAUDE_CODE_FAST_INIT)
+  ) {
+    return
+  }
   const [{ tools: mcpTools }, tools, userContext, systemContext] =
     await Promise.all([
       prefetchAllMcpResources(mcpConfigs),

@@ -444,16 +444,50 @@ async function detectWorktreeMainRepoPath(cwd: string): Promise<string | null> {
   }
 }
 
+let cachedDependencyCheck: SandboxDependencyCheck | undefined
+let pendingDependencyCheck: Promise<SandboxDependencyCheck> | undefined
+
 /**
- * Check if dependencies are available (memoized)
- * Returns { errors, warnings } - errors mean sandbox cannot run
+ * Asynchronously fetch and cache sandbox dependencies.
+ * Converts the new string Promise payload to the legacy sync object interface.
  */
-const checkDependencies = memoize((): SandboxDependencyCheck => {
+export async function prefetchSandboxDependencies(): Promise<SandboxDependencyCheck> {
+  if (cachedDependencyCheck) return cachedDependencyCheck
+  if (pendingDependencyCheck) return pendingDependencyCheck
+
   const { rgPath, rgArgs } = ripgrepCommand()
-  return BaseSandboxManager.checkDependencies({
+  
+  pendingDependencyCheck = (BaseSandboxManager.checkDependencies({
     command: rgPath,
     args: rgArgs,
+  }) as any).then((result: { isAvailable: boolean; reason: string | null }) => {
+    const check: SandboxDependencyCheck = { errors: [], warnings: [] }
+    if (!result.isAvailable) {
+      check.errors.push(result.reason || 'Missing sandbox dependencies')
+    }
+    cachedDependencyCheck = check
+    return check
+  }).catch((err: Error) => {
+    const check: SandboxDependencyCheck = { errors: [err.message], warnings: [] }
+    cachedDependencyCheck = check
+    return check
   })
+
+  return pendingDependencyCheck
+}
+
+/**
+ * Check if dependencies are available synchronously from cache.
+ * Returns { errors, warnings } - errors mean sandbox cannot run.
+ * If cache misses, fires the prefetch and returns a fast optimist track.
+ */
+const checkDependencies = memoize((): SandboxDependencyCheck => {
+  if (cachedDependencyCheck) {
+    return cachedDependencyCheck
+  }
+  // Fire off background hydration
+  prefetchSandboxDependencies().catch(() => {})
+  return { errors: [], warnings: [] }
 })
 
 function getSandboxEnabledSetting(): boolean {

@@ -1,9 +1,5 @@
-import {
-  type ClaudeForChromeContext,
-  createClaudeForChromeMcpServer,
-  type Logger,
-  type PermissionMode,
-} from '@ant/claude-for-chrome-mcp'
+import type { ClaudeForChromeContext, Logger, PermissionMode } from '@ant/claude-for-chrome-mcp'
+import { createRequire } from 'module'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { format } from 'util'
 import { shutdownDatadog } from '../../services/analytics/datadog.js'
@@ -250,6 +246,10 @@ export async function runClaudeInChromeMcpServer(): Promise<void> {
   initializeAnalyticsSink()
   const context = createChromeContext()
 
+  const _require = createRequire(import.meta.url)
+  const { createClaudeForChromeMcpServer } = _require('@ant/claude-for-chrome-mcp') as {
+    createClaudeForChromeMcpServer: (ctx: ClaudeForChromeContext) => { connect: (t: unknown) => Promise<void> }
+  }
   const server = createClaudeForChromeMcpServer(context)
   const transport = new StdioServerTransport()
 

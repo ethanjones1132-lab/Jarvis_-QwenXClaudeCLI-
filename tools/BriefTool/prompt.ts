@@ -7,7 +7,9 @@ export const BRIEF_TOOL_PROMPT = `Send a message the user will read. Text outsid
 
 \`message\` supports markdown. \`attachments\` takes file paths (absolute or cwd-relative) for images, diffs, logs.
 
-\`status\` labels intent: 'normal' when replying to what they just asked; 'proactive' when you're initiating — a scheduled task finished, a blocker surfaced during background work, you need input on something they haven't asked about. Set it honestly; downstream routing uses it.`
+\`status\` labels intent: 'normal' when replying to what they just asked; 'proactive' when you're initiating — a scheduled task finished, a blocker surfaced during background work, you need input on something they haven't asked about. Set it honestly; downstream routing uses it.
+
+This tool is for the user-facing reply itself. Do not use it to narrate or proxy an internal tool invocation; if you need a tool, call the tool directly and then use this tool for the final user-visible answer.`
 
 export const BRIEF_PROACTIVE_SECTION = `## Talking to the user
 

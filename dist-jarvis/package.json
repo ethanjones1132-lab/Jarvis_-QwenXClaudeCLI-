@@ -1,0 +1,7 @@
+{
+  "name": "jarvis-desktop",
+  "version": "0.1.0",
+  "description": "Jarvis desktop shell for the Claude-derived coding workspace.",
+  "author": "Jarvis",
+  "main": "main.cjs"
+}

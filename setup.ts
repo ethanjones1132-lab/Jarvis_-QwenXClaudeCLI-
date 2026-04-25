@@ -64,6 +64,9 @@ export async function setup(
   worktreePRNumber?: number,
   messagingSocketPath?: string,
 ): Promise<void> {
+  if (process.env.JARVIS_DEBUG_STARTUP) {
+    process.stderr.write(`[JARVIS_DEBUG] setup() entered at ${Date.now()}\n`)
+  }
   logForDiagnosticsNoPII('info', 'setup_started')
 
   // Check for Node.js version < 18

@@ -13,8 +13,14 @@ export type ThunderStepId =
   | 'forward-port'
   | 'health-check'
   | 'save-config'
+  // v2 snapshot-driven pathway
+  | 'create-instance'
+  | 'wait-running'
+  | 'poll-healthz'
+  | 'attach'
 
 export type ThunderStepState = 'pending' | 'active' | 'done' | 'error'
+  | 'skipped'
 
 export type ThunderStepStatus = {
   id: ThunderStepId
@@ -58,13 +64,28 @@ export type ThunderLogStreamPayload = {
   text: string
 }
 
+export const THUNDER_STEPS_V2: Array<{ id: ThunderStepId; label: string }> = [
+  { id: 'create-instance', label: 'Create GPU instance' },
+  { id: 'wait-running', label: 'Wait for instance ready' },
+  { id: 'forward-port', label: 'Forward port 8787' },
+  { id: 'poll-healthz', label: 'Wait for model load' },
+  { id: 'attach', label: 'Attach session' },
+]
+
+/** 3-step list for reconnecting to an already-running instance (skips create + wait). */
+export const THUNDER_STEPS_V2_ATTACH: Array<{ id: ThunderStepId; label: string }> = [
+  { id: 'forward-port', label: 'Forward port 8787' },
+  { id: 'poll-healthz', label: 'Wait for bridge ready' },
+  { id: 'attach', label: 'Attach session' },
+]
+
 export const THUNDER_STEPS: Array<{ id: ThunderStepId; label: string }> = [
   { id: 'connect-instance', label: 'Connect to instance' },
   { id: 'get-ssh-info', label: 'Get SSH details' },
-  { id: 'system-prep', label: 'Install dependencies' },
+  { id: 'pull-bridge', label: 'Provision bridge runtime' },
+  { id: 'system-prep', label: 'Prepare fallback runtime' },
   { id: 'start-vllm', label: 'Start vLLM server' },
   { id: 'poll-vllm', label: 'Wait for model loading' },
-  { id: 'pull-bridge', label: 'Pull bridge code' },
   { id: 'start-bridge', label: 'Start bridge server' },
   { id: 'poll-bridge', label: 'Verify bridge ready' },
   { id: 'verify-ports', label: 'Verify listening ports' },
@@ -79,11 +100,11 @@ export const THUNDER_ERROR_MESSAGES: Record<string, string> = {
   'ssh-failed':
     'Could not establish SSH connection to the GPU instance. Verify the instance is active and tnr connect completed successfully.',
   'vllm-oom':
-    'vLLM ran out of GPU memory loading the 120B model. Check ~/gptoss-120b.log. Try reducing --gpu-memory-utilization to 0.90.',
+    'vLLM ran out of GPU memory loading the 120B model. Check ~/gptoss-120b.log. The launcher now defaults to --gpu-memory-utilization 0.85 and --max-model-len 2048; if it still fails, try 0.80 / 1536.',
   'vllm-timeout':
-    'vLLM has not become ready after 25 minutes. If this is a fresh instance, the model weights may still be downloading (~70GB). Check ~/gptoss-120b.log for download progress. If a download is in progress, extend the timeout and retry.',
+    'vLLM has not become ready. If the snapshot is healthy, check that the pinned vllm-env includes native GPT-OSS plus MXFP4 support and that the local weights cache is complete. If the legacy fallback is running, the model weights may still be downloading (~63GB). Check ~/gptoss-120b.log for progress.',
   'bridge-crash':
-    'Bridge process failed to start. Check ~/jarvis-bridge.log for Python errors. Verify the git checkout in ~/claude-code-src-leaked is on the codex/remote-glm-bridge branch.',
+    'Bridge process failed to start. Check ~/jarvis-bridge.log for Python errors. Verify that ~/claude-code-src-leaked/server/remote_glm_bridge was uploaded successfully and that ~/.jarvis-remote-repo-root points at ~/claude-code-src-leaked.',
   'public-url-unreachable':
     'Bridge is running and ports are forwarded, but the public URL is not responding. This is usually a propagation delay. Wait 60 seconds and retry the health check.',
 }

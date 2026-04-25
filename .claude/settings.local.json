@@ -33,7 +33,16 @@
       "Bash(gh auth:*)",
       "Bash(git init:*)",
       "Bash(git add:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(powershell -Command \"Stop-Process -Name ''Jarvis'' -ErrorAction SilentlyContinue -Force; Start-Sleep -Seconds 1\")",
+      "Bash(node scripts/build-jarvis-electron.mjs --package)",
+      "Read(//c/Users/ethan/Downloads/**)",
+      "Bash(ls *.docx)",
+      "Bash(node -e ':*)",
+      "Bash(node --input-type=module --eval ':)",
+      "Bash(node --input-type=module --eval ':*)",
+      "Bash(node -e \"const d=require\\('fs'\\).readFileSync\\('/dev/stdin','utf8'\\); const j=JSON.parse\\(d\\); console.log\\(JSON.stringify\\({scripts:j.scripts,type:j.type,main:j.main},null,2\\)\\)\")",
+      "Bash(bun run:*)"
     ]
   }
 }

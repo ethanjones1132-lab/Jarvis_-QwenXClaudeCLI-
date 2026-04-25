@@ -14,12 +14,19 @@ import {
   closeTerminalWindow,
 } from './thunderTerminal.js'
 import { startDetection } from './thunderDetection.js'
+import { parseTnrStatus } from './thunderStatus.js'
 import {
   runAutomation,
+  runAutomationV2,
+  runAutomationV2Attach,
   type AutomationResult,
+  buildThunderHealthCheckUrl,
+  resolveThunderPublicUrl,
 } from './thunderAutomation.js'
 import {
   THUNDER_STEPS,
+  THUNDER_STEPS_V2,
+  THUNDER_STEPS_V2_ATTACH,
   type ThunderStepId,
   type ThunderStepState,
 } from './thunderTypes.js'
@@ -37,22 +44,15 @@ export function checkExistingSession(instanceId: string): Promise<string | null>
       resolve(null)
       return
     }
-    exec('tnr status', { timeout: 15_000 }, (error, stdout) => {
+    exec('tnr status --no-wait', { timeout: 15_000 }, (error, stdout) => {
       if (error) {
         resolve(null)
         return
       }
-      const lower = stdout.toLowerCase()
-      if (
-        stdout.includes(instanceId) &&
-        (lower.includes('running') ||
-          lower.includes('active') ||
-          lower.includes('online'))
-      ) {
-        resolve(instanceId)
-      } else {
-        resolve(null)
-      }
+      const runningInstance = parseTnrStatus(stdout).find(
+        inst => inst.id === instanceId && inst.status === 'running',
+      )
+      resolve(runningInstance ? instanceId : null)
     })
   })
 }
@@ -135,6 +135,16 @@ export function registerThunderIpc(getMainWindow: () => BrowserWindow | null): v
         // Mark save-config as done
         emitter.updateStep('save-config', 'done', null)
 
+        // Explicit completion broadcast — the panel awaits the invoke
+        // return, but this gives any other subscribed listener a clean
+        // signal that the full pipeline finished successfully.
+        if (!mainWin.isDestroyed()) {
+          mainWin.webContents.send('thunder:automation-complete', {
+            instanceId: result.instanceId,
+            publicUrl: result.publicUrl,
+          })
+        }
+
         return {
           ok: true,
           publicUrl: result.publicUrl,
@@ -163,7 +173,7 @@ export function registerThunderIpc(getMainWindow: () => BrowserWindow | null): v
     'thunder:health-check',
     async (_event, publicUrl: string, apiKey: string) => {
       try {
-        const response = await fetch(`${publicUrl}/healthz`, {
+        const response = await fetch(buildThunderHealthCheckUrl(publicUrl), {
           headers: { 'X-Api-Key': apiKey },
           signal: AbortSignal.timeout(10_000),
         })
@@ -184,15 +194,46 @@ export function registerThunderIpc(getMainWindow: () => BrowserWindow | null): v
   )
 
   // Forward a port (for resume flow, Step 4)
-  ipcMain.handle('thunder:forward-port', async () => {
+  ipcMain.handle('thunder:forward-port', async (_event, instanceId: string) => {
     return new Promise(resolve => {
-      exec('tnr ports forward 0 --add 8787', { timeout: 30_000 }, error => {
-        if (error) {
-          resolve({ ok: false, error: error.message })
-          return
-        }
-        resolve({ ok: true })
-      })
+      if (!instanceId) {
+        resolve({ ok: false, error: 'No Thunder instance ID was provided.' })
+        return
+      }
+      exec(
+        `tnr ports forward ${instanceId} --add 8787`,
+        { timeout: 30_000 },
+        (error, stdout, stderr) => {
+          if (error) {
+            resolve({ ok: false, error: error.message })
+            return
+          }
+
+          const forwardOutput = `${stdout}\n${stderr}`.trim()
+          const publicUrl = resolveThunderPublicUrl(forwardOutput, 8787)
+          if (publicUrl) {
+            resolve({ ok: true, publicUrl })
+            return
+          }
+
+          exec('tnr ports list', { timeout: 10_000 }, (listErr, listStdout, listStderr) => {
+            if (!listErr) {
+              const listOutput = `${listStdout}\n${listStderr}`.trim()
+              const listedUrl = resolveThunderPublicUrl(listOutput, 8787)
+              if (listedUrl) {
+                resolve({ ok: true, publicUrl: listedUrl })
+                return
+              }
+            }
+
+            resolve({
+              ok: false,
+              error:
+                'Port 8787 was forwarded, but Thunder did not expose a public URL yet. Retry in a few seconds.',
+            })
+          })
+        },
+      )
     })
   })
 
@@ -200,4 +241,104 @@ export function registerThunderIpc(getMainWindow: () => BrowserWindow | null): v
   ipcMain.handle('thunder:get-steps', () => {
     return THUNDER_STEPS
   })
+
+  // V2: Single-shot session start — creates instance, waits, forwards port, polls /healthz
+  ipcMain.handle(
+    'thunder:start-session',
+    async (_event, bridgeApiKey: string, snapshotName?: string) => {
+      const mainWin = getMainWindow()
+      if (!mainWin) throw new Error('Main window not available')
+
+      automationAbort = new AbortController()
+
+      const emitter = {
+        updateStep(stepId: ThunderStepId, state: ThunderStepState, error: string | null): void {
+          if (!mainWin.isDestroyed()) {
+            mainWin.webContents.send('thunder:step-update', { stepId, state, error })
+          }
+        },
+        log(source: string, text: string): void {
+          if (!mainWin.isDestroyed()) {
+            mainWin.webContents.send('thunder:log-stream', { source, text })
+          }
+        },
+      }
+
+      try {
+        const result: AutomationResult = await runAutomationV2(
+          bridgeApiKey,
+          mainWin,
+          emitter,
+          automationAbort.signal,
+          snapshotName ? { snapshotName } : undefined,
+        )
+
+        if (!mainWin.isDestroyed()) {
+          mainWin.webContents.send('thunder:automation-complete', {
+            instanceId: result.instanceId,
+            publicUrl: result.publicUrl,
+          })
+        }
+
+        return { ok: true, publicUrl: result.publicUrl, instanceId: result.instanceId }
+      } catch (err) {
+        return { ok: false, error: err instanceof Error ? err.message : String(err) }
+      }
+    },
+  )
+
+  // Get V2 steps list (for renderer to initialize the v2 progress UI)
+  ipcMain.handle('thunder:get-steps-v2', () => {
+    return THUNDER_STEPS_V2
+  })
+
+  // Get V2 attach steps list (3-step reconnect flow)
+  ipcMain.handle('thunder:get-steps-v2-attach', () => {
+    return THUNDER_STEPS_V2_ATTACH
+  })
+
+  // V2 attach: reconnect to an already-running instance (skip create + wait)
+  ipcMain.handle(
+    'thunder:attach-instance',
+    async (_event, instanceId: string, bridgeApiKey: string) => {
+      const mainWin = getMainWindow()
+      if (!mainWin) throw new Error('Main window not available')
+
+      automationAbort = new AbortController()
+
+      const emitter = {
+        updateStep(stepId: ThunderStepId, state: ThunderStepState, error: string | null): void {
+          if (!mainWin.isDestroyed()) {
+            mainWin.webContents.send('thunder:step-update', { stepId, state, error })
+          }
+        },
+        log(source: string, text: string): void {
+          if (!mainWin.isDestroyed()) {
+            mainWin.webContents.send('thunder:log-stream', { source, text })
+          }
+        },
+      }
+
+      try {
+        const result: AutomationResult = await runAutomationV2Attach(
+          instanceId,
+          bridgeApiKey,
+          mainWin,
+          emitter,
+          automationAbort.signal,
+        )
+
+        if (!mainWin.isDestroyed()) {
+          mainWin.webContents.send('thunder:automation-complete', {
+            instanceId: result.instanceId,
+            publicUrl: result.publicUrl,
+          })
+        }
+
+        return { ok: true, publicUrl: result.publicUrl, instanceId: result.instanceId }
+      } catch (err) {
+        return { ok: false, error: err instanceof Error ? err.message : String(err) }
+      }
+    },
+  )
 }

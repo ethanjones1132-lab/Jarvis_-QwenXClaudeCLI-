@@ -155,6 +155,8 @@ ${AGENT_TOOL_NAME}({
 
   const currentExamples = `Example usage:
 
+Important: the assistant narration in these examples is illustrative only. The actual action is still a tool call, not a quoted sentence about the tool.
+
 <example_agent_descriptions>
 "test-runner": use this agent after you are done writing code to run tests
 "greeting-responder": use this agent to respond to user greetings with a friendly joke

@@ -1,3 +1,4 @@
+import '../utils/runtimeMacro.js';
 import { feature } from 'bun:bundle';
 
 // Bugfix for corepack auto-pinning, which adds yarnpkg to peoples' package.jsons

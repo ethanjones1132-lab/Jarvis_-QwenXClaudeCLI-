@@ -15,6 +15,7 @@ import {
   getInferenceProfileBackingModel,
   isFoundationModel,
 } from '../utils/model/bedrock.js'
+import { shouldUseCompatibilityTokenEstimation } from '../utils/apiCompatibility.js'
 import {
   getDefaultSonnetModel,
   getMainLoopModel,
@@ -31,6 +32,17 @@ import { withTokenCountVCR } from './vcr.js'
 // API constraint: max_tokens must be greater than thinking.budget_tokens
 const TOKEN_COUNT_THINKING_BUDGET = 1024
 const TOKEN_COUNT_MAX_TOKENS = 2048
+
+function roughTokenCountEstimationForBetaMessagesAndTools(
+  messages: Anthropic.Beta.Messages.BetaMessageParam[],
+  tools: Anthropic.Beta.Messages.BetaToolUnion[],
+): number {
+  let total = roughTokenCountEstimation(jsonStringify(messages))
+  if (tools.length > 0) {
+    total += roughTokenCountEstimation(jsonStringify(tools))
+  }
+  return total
+}
 
 /**
  * Check if messages contain thinking blocks
@@ -124,6 +136,10 @@ function stripToolSearchFieldsFromMessages(
 export async function countTokensWithAPI(
   content: string,
 ): Promise<number | null> {
+  if (shouldUseCompatibilityTokenEstimation()) {
+    return roughTokenCountEstimation(content)
+  }
+
   // Special case for empty content - API doesn't accept empty messages
   if (!content) {
     return 0
@@ -141,6 +157,10 @@ export async function countMessagesTokensWithAPI(
   messages: Anthropic.Beta.Messages.BetaMessageParam[],
   tools: Anthropic.Beta.Messages.BetaToolUnion[],
 ): Promise<number | null> {
+  if (shouldUseCompatibilityTokenEstimation()) {
+    return roughTokenCountEstimationForBetaMessagesAndTools(messages, tools)
+  }
+
   return withTokenCountVCR(messages, tools, async () => {
     try {
       const model = getMainLoopModel()
@@ -252,6 +272,10 @@ export async function countTokensViaHaikuFallback(
   messages: Anthropic.Beta.Messages.BetaMessageParam[],
   tools: Anthropic.Beta.Messages.BetaToolUnion[],
 ): Promise<number | null> {
+  if (shouldUseCompatibilityTokenEstimation()) {
+    return roughTokenCountEstimationForBetaMessagesAndTools(messages, tools)
+  }
+
   // Check if messages contain thinking blocks
   const containsThinking = hasThinkingBlocks(messages)
 

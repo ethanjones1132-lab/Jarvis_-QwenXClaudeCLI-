@@ -1,0 +1,34 @@
+{
+  "appId": "com.jarvis.desktop",
+  "productName": "Jarvis",
+  "directories": {
+    "app": "dist-jarvis",
+    "output": "dist-desktop/electron"
+  },
+  "files": [
+    "**/*"
+  ],
+  "extraFiles": [
+    {
+      "from": "dist-desktop/ClaudeCodeCli.exe",
+      "to": "ClaudeCodeCli.exe"
+    },
+    {
+      "from": "node_modules/vscode-jsonrpc",
+      "to": "node_modules/vscode-jsonrpc"
+    }
+  ],
+  "extraResources": [
+    {
+      "from": "dist-desktop/JarvisWorker.exe",
+      "to": "bin/JarvisWorker.exe"
+    }
+  ],
+  "win": {
+    "target": [
+      "dir"
+    ],
+    "artifactName": "Jarvis.exe",
+    "signAndEditExecutable": false
+  }
+}

@@ -77,6 +77,7 @@ import {
   createUserMessage,
   withMemoryCorrectionHint,
 } from '../../utils/messages.js'
+import { formatUnknownToolError } from '../../utils/toolCallReference.js'
 import type {
   PermissionDecisionReason,
   PermissionResult,
@@ -102,6 +103,7 @@ import {
   formatError,
   formatZodValidationError,
 } from '../../utils/toolErrors.js'
+import { getToolCallRepairHint } from '../../utils/toolCallReference.js'
 import {
   processPreMappedToolResultBlock,
   processToolResultBlock,
@@ -367,6 +369,10 @@ export async function* runToolUse(
 
   // Check if the tool exists
   if (!tool) {
+    const toolError = formatUnknownToolError(
+      toolName,
+      toolUseContext.options.tools.map(availableTool => availableTool.name),
+    )
     const sanitizedToolName = sanitizeToolNameForAnalytics(toolName)
     logForDebugging(`Unknown tool ${toolName}: ${toolUse.id}`)
     logEvent('tengu_tool_use_error', {
@@ -398,12 +404,12 @@ export async function* runToolUse(
         content: [
           {
             type: 'tool_result',
-            content: `<tool_use_error>Error: No such tool available: ${toolName}</tool_use_error>`,
+            content: `<tool_use_error>${toolError}</tool_use_error>`,
             is_error: true,
             tool_use_id: toolUse.id,
           },
         ],
-        toolUseResult: `Error: No such tool available: ${toolName}`,
+        toolUseResult: toolError,
         sourceToolAssistantUUID: assistantMessage.uuid,
       }),
     }
@@ -615,6 +621,10 @@ async function checkPermissionsAndCallTool(
   const parsedInput = tool.inputSchema.safeParse(input)
   if (!parsedInput.success) {
     let errorContent = formatZodValidationError(tool.name, parsedInput.error)
+    const repairHint = getToolCallRepairHint(tool.name)
+    if (repairHint) {
+      errorContent += `\n\n${repairHint}`
+    }
 
     const schemaHint = buildSchemaNotSentHint(
       tool,
