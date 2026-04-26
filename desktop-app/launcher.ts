@@ -75,6 +75,7 @@ import { loadJournalContext, updateJournal } from './reasoning/journal.js'
 import { shouldTriggerAutoDream, runAutoDreamPass } from './reasoning/autoDream.js'
 import { loadEmbeddingCache, persistEmbeddingCache } from './drive/driveCache.js'
 import { assembleContext, buildOllamaOptions, CONTEXT_BUDGET } from './agent/contextAssembler.js'
+import { compressObservation } from './agent/contextCompressor.js'
 import {
   validateToolCall,
   buildOllamaToolList,
@@ -4513,11 +4514,20 @@ async function sendAgenticLocalPrompt(
           }
         }
 
+        // ── P1: Compress observation at source before it enters context ────
+        // compressObservation() surgically extracts high-signal lines
+        // (errors, summaries, keyword-relevant content) before the hard
+        // obsLen cap applies — so the context window gets compact + complete
+        // output rather than a raw truncation mid-sentence.
+        // We keep the original resultText for toolSteps[].resultPreview and
+        // Drive storage so those are never affected by compression.
+        const resultForContext = compressObservation(toolName, resultText, userContent)
+
         // Inject result back into conversation — run through auditor first so
         // correction hints are appended when recognisable failure patterns are detected.
         // buildObservation pre-caps the raw result to 600 chars when a correction hint
         // is present, guaranteeing the hint is never cut off by the outer obsLen cap.
-        let observation = buildObservation(toolName, coercedArgs.args, resultText)
+        let observation = buildObservation(toolName, coercedArgs.args, resultForContext)
 
         // Cap the raw observation BEFORE adding critical guidance hints so those
         // hints are always fully visible regardless of the raw result length.
