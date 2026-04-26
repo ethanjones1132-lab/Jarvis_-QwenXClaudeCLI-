@@ -1,5 +1,5 @@
 /**
- * SnapshotUpdateDialog — Agent memory snapshot update prompt.
+ * SnapshotUpdateDialog â€” Agent memory snapshot update prompt.
  *
  * Shown when an agent definition has a pending snapshot update. The user
  * chooses how to handle the conflict between the current memory state and
