@@ -2113,6 +2113,41 @@ function buildChildEnv(config: LauncherConfig): Record<string, string> {
   if (isSharedLocalRuntime(config)) {
     env.CLAUDE_CODE_SIMPLE = '1'
     env.CLAUDE_CODE_FAST_INIT = '1'
+
+    // ── CRITICAL: shared runtime uses ClaudeCodeCli.exe which calls the REAL
+    // Anthropic API.  The Ollama-routing env vars written above (ANTHROPIC_BASE_URL
+    // → Ollama, ANTHROPIC_API_KEY → dummy, ANTHROPIC_MODEL → Ollama model name)
+    // must all be overridden back to real values.  Leaving the Ollama model name
+    // in ANTHROPIC_MODEL causes ClaudeCodeCli.exe to send requests to
+    // api.anthropic.com with model="qwen2.5:7b-instruct-q4_K_M", which Anthropic
+    // logs and bills against the user's account.
+    env.CLAUDE_CODE_COMPAT_MODE = 'native'
+    delete env.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS
+
+    // Restore real API key — process.env still holds the original value before
+    // buildChildEnv overwrote it with 'ollama-dummy-key'.
+    if (config.anthropicApiKey.trim()) {
+      env.ANTHROPIC_API_KEY = config.anthropicApiKey.trim()
+    } else if (process.env.ANTHROPIC_API_KEY) {
+      env.ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY
+    } else {
+      delete env.ANTHROPIC_API_KEY
+    }
+
+    // Restore real base URL (or remove to use the SDK default).
+    if (config.anthropicBaseUrl.trim()) {
+      env.ANTHROPIC_BASE_URL = config.anthropicBaseUrl.trim()
+    } else {
+      delete env.ANTHROPIC_BASE_URL
+    }
+
+    // Use the configured Claude model, NEVER the Ollama model name.
+    if (config.anthropicModel.trim()) {
+      env.ANTHROPIC_MODEL = config.anthropicModel.trim()
+    } else {
+      delete env.ANTHROPIC_MODEL
+    }
+
     // vscode-jsonrpc is --external in the ClaudeCodeCli.exe bun build; ship it
     // alongside the binary and point NODE_PATH at it so the binary can resolve it.
     const cliNodePath = process.env.JARVIS_NODE_PATH?.trim()
