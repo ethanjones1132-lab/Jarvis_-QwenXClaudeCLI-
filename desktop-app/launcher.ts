@@ -2115,37 +2115,38 @@ function buildChildEnv(config: LauncherConfig): Record<string, string> {
     env.CLAUDE_CODE_SIMPLE = '1'
     env.CLAUDE_CODE_FAST_INIT = '1'
 
-    // ── CRITICAL: shared runtime uses ClaudeCodeCli.exe which calls the REAL
-    // Anthropic API.  The Ollama-routing env vars written above (ANTHROPIC_BASE_URL
-    // → Ollama, ANTHROPIC_API_KEY → dummy, ANTHROPIC_MODEL → Ollama model name)
-    // must all be overridden back to real values.  Leaving the Ollama model name
-    // in ANTHROPIC_MODEL causes ClaudeCodeCli.exe to send requests to
-    // api.anthropic.com with model="qwen2.5:7b-instruct-q4_K_M", which Anthropic
-    // logs and bills against the user's account.
-    env.CLAUDE_CODE_COMPAT_MODE = 'native'
-    delete env.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS
+    // ── BILLING FIX — minimal and correct ───────────────────────────────────
+    //
+    // Architecture: the shared local runtime routes ClaudeCodeCli.exe inference
+    // through Ollama via the ANTHROPIC_BASE_URL → Ollama override above.
+    // ClaudeCodeCli.exe does NOT call the real Anthropic API for inference.
+    //
+    // What caused billing: ANTHROPIC_MODEL was set to the Ollama model name
+    // (e.g. "qwen2.5:7b-instruct-q4_K_M") by the unconditional block above.
+    // If any ClaudeCodeCli.exe call escapes the URL override (auth telemetry,
+    // version checks), it carried that Ollama model name to Anthropic's servers,
+    // which logged it in the Console.
+    //
+    // The correct fix is targeted:
+    //   1. Keep ANTHROPIC_BASE_URL → Ollama  (inference stays local, no billing)
+    //   2. Keep ANTHROPIC_API_KEY = 'ollama-dummy-key'  (Ollama accepts it;
+    //      if any request escapes the URL override, the dummy key fails
+    //      Anthropic auth → request rejected → zero billing, guaranteed)
+    //   3. Fix ANTHROPIC_MODEL → use the real configured Claude model name,
+    //      NOT the Ollama model name. This is purely defensive: if a request
+    //      somehow escapes AND somehow authenticates, it names a real model.
+    //
+    // DO NOT switch CLAUDE_CODE_COMPAT_MODE to 'native' — that would point
+    // the SDK at the real Anthropic endpoint and break Ollama routing entirely.
+    // DO NOT delete ANTHROPIC_API_KEY — removing the dummy key may allow
+    // stored ClaudeCode credentials to be used for real Anthropic calls.
 
-    // Restore real API key — process.env still holds the original value before
-    // buildChildEnv overwrote it with 'ollama-dummy-key'.
-    if (config.anthropicApiKey.trim()) {
-      env.ANTHROPIC_API_KEY = config.anthropicApiKey.trim()
-    } else if (process.env.ANTHROPIC_API_KEY) {
-      env.ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY
-    } else {
-      delete env.ANTHROPIC_API_KEY
-    }
-
-    // Restore real base URL (or remove to use the SDK default).
-    if (config.anthropicBaseUrl.trim()) {
-      env.ANTHROPIC_BASE_URL = config.anthropicBaseUrl.trim()
-    } else {
-      delete env.ANTHROPIC_BASE_URL
-    }
-
-    // Use the configured Claude model, NEVER the Ollama model name.
+    // Fix the model name leak — this is the only env var that was wrong.
     if (config.anthropicModel.trim()) {
       env.ANTHROPIC_MODEL = config.anthropicModel.trim()
     } else {
+      // Use the SDK default rather than the Ollama model name.
+      // Ollama ignores the model field when routing via ANTHROPIC_BASE_URL.
       delete env.ANTHROPIC_MODEL
     }
 
