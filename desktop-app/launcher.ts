@@ -89,7 +89,7 @@ import {
 } from './agent/toolCallParser.js'
 import { buildToolRoutingHint, getToolFastPathLabel, NO_TOOL_LABELS, isWeatherQuery, isDriveStatusQuery } from './agent/toolFastPath.js'
 import { classifyTask, buildComplexityHint, isAmbiguousRequest } from './agent/taskClassifier.js'
-import { buildObservation, detectResultStagnation, preflightCheck, checkDeadEnd, isTransientError, analyzeFailurePattern } from './agent/responseAuditor.js'
+import { buildObservation, detectResultStagnation, preflightCheck, checkDeadEnd, isTransientError, analyzeFailurePattern, semanticGrade } from './agent/responseAuditor.js'
 import { storeCorrection, loadRelevantCorrections } from './agent/correctionMemory.js'
 import { shouldUseInProcessOllamaSession } from './ollamaSessionMode.js'
 import { shouldSkipSharedRuntimeContextRetrievals } from './sharedRuntimeContext.js'
@@ -4529,6 +4529,44 @@ async function sendAgenticLocalPrompt(
 
         // Append critical guidance AFTER capping — these must always be fully visible.
         if (stagnationHint) observation += stagnationHint
+
+        // ── Semantic grade — P0 ──────────────────────────────────────────────
+        // Check whether the tool result actually addresses the task goal, not just
+        // whether it succeeded structurally (exit 0, HTTP 200, non-empty output).
+        // A WebFetch that returns a 200 with completely unrelated content should not
+        // reset consecutiveFailureCount and block replanning.
+        //
+        // Only fire on tools that can produce semantically wrong content at the
+        // output level (web + bash). File tools are always semantically correct
+        // when structurally passing — semanticGrade handles that internally.
+        if (result.success) {
+          const grade = semanticGrade(toolName, userContent, resultText)
+          if (grade === 'fail') {
+            // Structural success but content is off-topic — append a mismatch hint
+            // so the model knows to re-evaluate its approach, and count it as a
+            // soft failure so replanning eventually triggers.
+            observation +=
+              `\n\n[SEMANTIC MISMATCH] This tool call succeeded (no errors) but the result ` +
+              `does not appear to address the current task.\n` +
+              `Task goal: "${userContent.slice(0, 80)}"\n` +
+              `The output contains no expected keywords from the task goal. ` +
+              `If this is the wrong file, URL, or query for the task, change your approach ` +
+              `before the next tool call — do not keep querying the same resource.`
+            // Treat as a soft failure for replanning thresholds
+            consecutiveFailureCount++
+            if (toolName === lastFailedTool) {
+              sameToolConsecutiveFailures++
+            } else {
+              sameToolConsecutiveFailures = 1
+              lastFailedTool = toolName
+            }
+            emit({
+              type: 'info',
+              label: 'Semantic mismatch',
+              body: `${toolName} returned off-topic content for: "${userContent.slice(0, 60)}"`,
+            })
+          }
+        }
 
         // Phase 1.4: Dead-end escalation.
         // Trigger on 2 same-tool consecutive failures (stuck on one tool) OR 5 any failures
