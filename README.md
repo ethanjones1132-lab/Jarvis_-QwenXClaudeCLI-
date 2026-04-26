@@ -491,6 +491,6 @@ All upstream capabilities are preserved and fully functional — Jarvis adds on 
 
 <div align="center">
 
-Built with 🦆 by Ethan Jansen — Jarvis is your personal AI, your way.
+Built by Ethan Jones — Jarvis is your personal AI, your way.
 
 </div>
