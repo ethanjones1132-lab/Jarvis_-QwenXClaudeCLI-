@@ -38,6 +38,7 @@
 - [Directory Structure](#directory-structure)
 - [Tech Stack](#tech-stack)
 - [Getting Started](#getting-started)
+- [Recent Updates & Commits](#recent-updates--commits)
 - [Original Source Reference](#original-source-reference)
 
 ---
@@ -478,6 +479,23 @@ ollama pull qwen2.5-coder:7b
 # In Jarvis desktop: Backend → Local, Model → qwen2.5-coder:7b
 # Keep tools disabled until multi-turn validation passes
 ```
+
+---
+
+## Recent Updates & Commits
+
+### Latest Changes
+
+| Commit | Description | Date |
+|---|---|---|
+| `d919e27` | Readme update - correct author attribution | Apr 26, 2026 |
+| `eaa9b74` | Fix SnapshotUpdateDialog: rename .ts → .tsx to allow JSX compilation | Recent |
+
+### Development Status
+
+- **Active Development** — Jarvis is under active development with regular improvements to desktop components, build pipeline, and core infrastructure
+- **Component Compilation** — Recent improvements to dialog components (SnapshotUpdateDialog) to properly support JSX compilation in the Electron build pipeline
+- **Build System** — Custom Electron build pipeline (`scripts/build-jarvis-electron.mjs`) handles packaging with proper TypeScript/TSX support
 
 ---
 
